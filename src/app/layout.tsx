@@ -1,3 +1,4 @@
+import {ThemeProvider} from "@/context/theme-provider";
 import type {Metadata} from "next";
 import {Bebas_Neue, DM_Sans} from "next/font/google";
 import "./globals.css";
@@ -24,8 +25,12 @@ export default function RootLayout({
     children: React.ReactNode;
 }>) {
     return (
-        <html lang="en">
-            <body className={`${bebas.variable} ${dmSans.variable} font-dm antialiased`}>{children}</body>
+        <html lang="en" suppressHydrationWarning>
+            <body className={`${bebas.variable} ${dmSans.variable} font-dm antialiased`}>
+                <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+                    {children}
+                </ThemeProvider>
+            </body>
         </html>
     );
 }
