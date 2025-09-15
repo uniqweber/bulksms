@@ -1,3 +1,4 @@
+import {UserProvider} from "@/context/firebase-context";
 import {ThemeProvider} from "@/context/theme-provider";
 import type {Metadata} from "next";
 import {Bebas_Neue, DM_Sans} from "next/font/google";
@@ -28,7 +29,7 @@ export default function RootLayout({
         <html lang="en" suppressHydrationWarning>
             <body className={`${bebas.variable} ${dmSans.variable} font-dm antialiased`}>
                 <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-                    {children}
+                    <UserProvider>{children}</UserProvider>
                 </ThemeProvider>
             </body>
         </html>

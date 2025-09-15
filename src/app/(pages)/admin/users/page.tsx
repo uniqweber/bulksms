@@ -1,6 +1,6 @@
 "use client";
 
-import AdminDashboardLayout from "@/components/admin/layout/dashboard-layout";
+import AdminDashboardLayout from "@/components/admin/layout/admin-layout";
 import {Badge} from "@/components/ui/badge";
 import {Button} from "@/components/ui/button";
 import {Card, CardContent} from "@/components/ui/card";
@@ -217,7 +217,9 @@ export default function AdminUsers() {
                                                     <td className="p-4">{user.email}</td>
                                                     <td className="p-4">{user.credits}</td>
                                                     <td className="p-4">
-                                                        <Badge variant={user.status === "active" ? "default" : "secondary"}>
+                                                        <Badge
+                                                            variant={user.status === "active" ? "default" : "secondary"}
+                                                        >
                                                             {user.status}
                                                         </Badge>
                                                     </td>

@@ -1,6 +1,6 @@
 "use client";
 
-import UserDashboardLayout from "@/components/dashboard/layout/dashboard-layout";
+import UserDashboardLayout from "@/components/dashboard/layout/user-dashboard-layout";
 import {Alert, AlertDescription, AlertTitle} from "@/components/ui/alert";
 import {Button} from "@/components/ui/button";
 import {Card, CardContent} from "@/components/ui/card";
@@ -40,7 +40,6 @@ export default function CreateCampaign() {
     });
 
     const fileInputRef = useRef<HTMLInputElement>(null);
-
 
     // Handle input changes
     const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {

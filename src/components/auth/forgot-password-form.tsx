@@ -4,17 +4,44 @@ import {Button} from "@/components/ui/button";
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from "@/components/ui/card";
 import {Input} from "@/components/ui/input";
 import {Label} from "@/components/ui/label";
+import {useUser} from "@/context/firebase-context";
 import {cn} from "@/lib/utils";
 import Link from "next/link";
-import {useRouter} from "next/navigation";
+import {useState} from "react";
 import Logo from "../ui/logo";
 
 export function ForgotPasswordForm({className, ...props}: React.ComponentProps<"div">) {
-    const router = useRouter();
-    const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    const {resetPassword} = useUser(); // Use context
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
+    const [success, setSuccess] = useState("");
+
+    const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        router.push("/new-password");
+        setError("");
+        setSuccess("");
+        setLoading(true);
+
+        const target = e.target as typeof e.target & {
+            email: {value: string};
+        };
+
+        const email = target.email.value.trim();
+
+        try {
+            await resetPassword(email);
+            setSuccess("Reset link sent! Check your email.");
+        } catch (err: unknown) {
+            if (err instanceof Error) {
+                setError(err.message);
+            } else {
+                setError("Something went wrong");
+            }
+        } finally {
+            setLoading(false); // stop loading
+        }
     };
+
     return (
         <div className={cn("flex flex-col gap-6", className)} {...props}>
             <Card>
@@ -30,8 +57,12 @@ export function ForgotPasswordForm({className, ...props}: React.ComponentProps<"
                                 <Label htmlFor="email">Email</Label>
                                 <Input id="email" type="email" placeholder="m@example.com" required />
                             </div>
-                            <Button type="submit" className="w-full">
-                                Send Reset Link
+
+                            {error && <p className="text-red-500 text-sm">{error}</p>}
+                            {success && <p className="text-green-500 text-sm">{success}</p>}
+
+                            <Button type="submit" className="w-full" disabled={loading}>
+                                {loading ? "Sending..." : "Send Reset Link"}
                             </Button>
                         </div>
                         <div className="mt-4 text-center text-sm font-medium">

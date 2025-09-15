@@ -1,6 +1,6 @@
 "use client";
 
-import UserDashboardLayout from "@/components/dashboard/layout/dashboard-layout";
+import UserDashboardLayout from "@/components/dashboard/layout/user-dashboard-layout";
 import {Button} from "@/components/ui/button";
 import {Input} from "@/components/ui/input";
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "@/components/ui/select";
@@ -66,7 +66,6 @@ const CampaignTable: React.FC<CampaignTableProps> = ({campaigns}) => (
                         <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                             Status
                         </th>
-                      
                     </tr>
                 </thead>
                 <tbody className="divide-y">

@@ -1,6 +1,6 @@
 "use client";
 
-import AdminDashboardLayout from "@/components/admin/layout/dashboard-layout";
+import AdminDashboardLayout from "@/components/admin/layout/admin-layout";
 import {Badge} from "@/components/ui/badge";
 import {Button} from "@/components/ui/button";
 import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";

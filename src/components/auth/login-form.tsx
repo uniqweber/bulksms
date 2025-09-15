@@ -8,15 +8,44 @@ import {cn} from "@/lib/utils";
 import Link from "next/link";
 import Logo from "../ui/logo";
 import PasswordInput from "../ui/password-input";
-import { useRouter } from "next/navigation";
+import {useRouter} from "next/navigation";
+import {useState} from "react";
+import { useUser } from "@/context/firebase-context";
 
 
 export function LoginForm({className, ...props}: React.ComponentProps<"div">) {
     const router = useRouter();
-    const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    const {login} = useUser(); // Using context
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
+
+    const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        router.push("/dashboard");
+        setError("");
+        setLoading(true);
+
+        const target = e.target as typeof e.target & {
+            email: {value: string};
+            password: {value: string};
+        };
+
+        const email = target.email.value.trim();
+        const password = target.password.value;
+
+        try {
+            await login({email, password});
+
+            // Redirect based on role
+            // Assuming user role is updated in context inside login
+            router.push("/dashboard");
+        } catch (err: unknown) {
+            if (err instanceof Error) setError(err.message);
+            else setError("Something went wrong");
+        } finally {
+            setLoading(false);
+        }
     };
+
     return (
         <div className={cn("flex flex-col gap-6", className)} {...props}>
             <Card>
@@ -42,13 +71,16 @@ export function LoginForm({className, ...props}: React.ComponentProps<"div">) {
                                         Forgot your password?
                                     </Link>
                                 </div>
-                                <PasswordInput id="password" />
+                                <PasswordInput id="password" required />
                             </div>
 
-                            <Button type="submit" className="w-full">
-                                Login
+                            {error && <p className="text-red-500 text-sm">{error}</p>}
+
+                            <Button type="submit" className="w-full" disabled={loading}>
+                                {loading ? "Logging in..." : "Login"}
                             </Button>
                         </div>
+
                         <div className="mt-4 text-center text-sm font-medium">
                             Don&apos;t have an account?{" "}
                             <Link href="/register" className="underline underline-offset-4">

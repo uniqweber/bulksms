@@ -1,7 +1,7 @@
 "use client";
 import {useState} from "react";
 
-import UserDashboardLayout from "@/components/dashboard/layout/dashboard-layout";
+import UserDashboardLayout from "@/components/dashboard/layout/user-dashboard-layout";
 import OverviewHeader from "@/components/dashboard/overview/overview-header";
 import QuickActions from "@/components/dashboard/overview/quick-actions";
 import RecentCampaigns from "@/components/dashboard/overview/recent-campaigns";

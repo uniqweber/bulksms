@@ -4,9 +4,9 @@ import {CreditCard, FileText, MessageCircle, User} from "lucide-react";
 import * as React from "react";
 
 import {Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarRail} from "@/components/ui/sidebar";
-import {Branding} from "./branding";
-import {SidebarLinks} from "./sidebar-links";
-import {SidebarUser} from "./sidebar-user";
+import {Branding} from "./user-branding";
+import {SidebarLinks} from "./user-sidebar-links";
+import {SidebarUser} from "./user-sidebar";
 
 // This is sample data.
 const data = {
@@ -19,33 +19,33 @@ const data = {
     routes: [
         {
             name: "Overview",
-            url: "/admin",
+            url: "/dashboard",
             icon: FileText,
         },
         {
-            name: "Campaign",
-            url: "/admin/campaigns",
+            name: "Create Campaign",
+            url: "/dashboard/create-campaign",
             icon: MessageCircle,
         },
         {
-            name: "Payments",
-            url: "/admin/payments",
+            name: "Campaigns",
+            url: "/dashboard/campaigns",
             icon: FileText,
         },
         {
-            name: "Users",
-            url: "/admin/users",
+            name: "Buy Credits",
+            url: "/dashboard/buy-credits",
             icon: CreditCard,
         },
         {
-            name: "Settings",
-            url: "/admin/settings",
+            name: "Account",
+            url: "/dashboard/account",
             icon: User,
         },
     ],
 };
 
-export function AdminDashboardSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
+export function DashboardSidebar({...props}: React.ComponentProps<typeof Sidebar>) {
     return (
         <Sidebar collapsible="icon" {...props}>
             <SidebarHeader className="">

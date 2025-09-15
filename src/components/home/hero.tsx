@@ -77,6 +77,7 @@ export const Hero = () => {
                             alt="Bulk SMS Platform Dashboard showing message delivery analytics and global reach"
                             width={800}
                             height={800}
+                            priority
                             className="w-full h-auto object-cover"
                         />
                     </div>

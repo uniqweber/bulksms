@@ -4,7 +4,7 @@ import OrderSummary from "@/components/dashboard/credits/order-summary";
 import PackageCard from "@/components/dashboard/credits/package-card";
 import PaymentTabs from "@/components/dashboard/credits/payment-tabs";
 import SuccessMsg from "@/components/dashboard/credits/success-msg";
-import UserDashboardLayout from "@/components/dashboard/layout/dashboard-layout";
+import UserDashboardLayout from "@/components/dashboard/layout/user-dashboard-layout";
 import {Alert, AlertDescription, AlertTitle} from "@/components/ui/alert";
 import {AlertCircle, Bitcoin, CreditCard} from "lucide-react";
 import {useEffect, useState} from "react";

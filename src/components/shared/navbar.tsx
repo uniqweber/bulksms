@@ -1,12 +1,15 @@
 "use client";
 
 import {Button} from "@/components/ui/button";
+import {useUser} from "@/context/firebase-context";
 import {Menu, MessageCircle, X} from "lucide-react";
 import Link from "next/link";
 import {useState} from "react";
 
 export const Navbar = () => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+    const {user} = useUser();
 
     const navItems = [
         {label: "Features", href: "#features"},
@@ -42,15 +45,23 @@ export const Navbar = () => {
 
                     {/* CTA Buttons */}
                     <div className="hidden md:flex items-center space-x-4 text-black">
-                        <button>
-                            <Link href={"/register"}>Sign In</Link>
-                        </button>
-                        <button className="bg-gradient-to-r from-blue-500 to-purple-600 text-white h-9 font-medium px-5 rounded-full">
-                            <Link href={"/admin"}>Admin</Link>
-                        </button>
-                        <button className="bg-gradient-to-r from-blue-500 to-purple-600 text-white h-9 font-medium px-5 rounded-full">
-                            <Link href={"/dashboard/"}>Dashboard</Link>
-                        </button>
+                        {!user && (
+                            <button className="bg-gradient-to-r from-blue-500 to-purple-600 text-white h-9 font-medium px-5 rounded-full">
+                                <Link href="/login">Sign In</Link>
+                            </button>
+                        )}
+
+                        {user && user.role === "user" && (
+                            <button className="bg-gradient-to-r from-blue-500 to-purple-600 text-white h-9 font-medium px-5 rounded-full">
+                                <Link href="/dashboard">Dashboard</Link>
+                            </button>
+                        )}
+
+                        {user && user.role === "admin" && (
+                            <button className="bg-gradient-to-r from-blue-500 to-purple-600 text-white h-9 font-medium px-5 rounded-full">
+                                <Link href="/admin">Admin</Link>
+                            </button>
+                        )}
                     </div>
 
                     {/* Mobile Menu Button */}
