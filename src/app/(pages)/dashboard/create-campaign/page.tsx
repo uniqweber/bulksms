@@ -8,9 +8,13 @@ import {Input} from "@/components/ui/input";
 import {Label} from "@/components/ui/label";
 import {Tabs, TabsContent, TabsList, TabsTrigger} from "@/components/ui/tabs";
 import {Textarea} from "@/components/ui/textarea";
+import {useUser} from "@/context/firebase-context";
+import {db} from "@/firebase";
+import {addDoc, collection, doc, increment, serverTimestamp, updateDoc} from "firebase/firestore";
 import {AlertCircle, Info, Loader2, Send, Upload} from "lucide-react";
 import {useRouter} from "next/navigation";
 import {ChangeEvent, FormEvent, useRef, useState} from "react";
+import * as XLSX from "xlsx";
 
 interface Contact {
     [key: string]: string;
@@ -25,6 +29,7 @@ interface CampaignData {
 
 export default function CreateCampaign() {
     const navigate = useRouter();
+    const {user} = useUser(); // current logged in user
     const [step, setStep] = useState<number>(1);
     const [loading, setLoading] = useState<boolean>(false);
     const [error, setError] = useState<string>("");
@@ -32,6 +37,7 @@ export default function CreateCampaign() {
     const [csvFile, setCsvFile] = useState<File | null>(null);
     const [contacts, setContacts] = useState<Contact[]>([]);
     const [contactsPreview, setContactsPreview] = useState<Contact[]>([]);
+    const [manualContacts, setManualContacts] = useState<number>(0);
     const [campaignData, setCampaignData] = useState<CampaignData>({
         name: "",
         message: "",
@@ -47,30 +53,32 @@ export default function CreateCampaign() {
         setCampaignData((prev) => ({...prev, [name]: value}));
     };
 
-    // Handle file upload
+    // Handle file upload (CSV or Excel)
     const handleFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (file) {
-            if (file.type !== "text/csv") {
-                setError("Please upload a CSV file");
-                return;
-            }
+        if (!file) return;
 
-            setCsvFile(file);
-            setError("");
+        console.log(file);
 
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const text = event.target?.result as string;
+        setCsvFile(file);
+        setError("");
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const data = event.target?.result;
+            if (!data) return;
+
+            let parsedContacts: Contact[] = [];
+
+            if (file.name.endsWith(".csv")) {
+                const text = data as string;
                 const rows = text.split("\n").filter((r) => r.trim() !== "");
                 const headers = rows[0].split(",");
 
                 if (!headers.includes("phone")) {
-                    setError('CSV must include a "phone" column');
+                    setError('CSV/Excel must include a "phone" column');
                     return;
                 }
-
-                const parsedContacts: Contact[] = [];
 
                 for (let i = 1; i < rows.length; i++) {
                     const values = rows[i].split(",");
@@ -80,21 +88,34 @@ export default function CreateCampaign() {
                     });
                     parsedContacts.push(contact);
                 }
+            } else {
+                const workbook = XLSX.read(data, {type: "binary"});
+                const sheetName = workbook.SheetNames[0];
+                const sheet = workbook.Sheets[sheetName];
+                parsedContacts = XLSX.utils.sheet_to_json(sheet);
+            }
 
-                setContacts(parsedContacts);
-                setContactsPreview(parsedContacts.slice(0, 5));
-            };
+            setContacts(parsedContacts);
+            setContactsPreview(parsedContacts.slice(0, 5));
+        };
 
+        if (file.name.endsWith(".csv")) {
             reader.readAsText(file);
+        } else {
+            reader.readAsBinaryString(file);
         }
     };
 
-    // Handle form submission
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
 
-        if (step === 1 && !csvFile) {
-            setError("Please upload a CSV file with contacts");
+        if (!user) {
+            setError("You must be logged in to create a campaign");
+            return;
+        }
+
+        if (step === 1 && !csvFile && manualContacts <= 0) {
+            setError("Please upload a CSV/Excel file or enter total contacts manually");
             return;
         }
 
@@ -108,18 +129,44 @@ export default function CreateCampaign() {
                 return;
             }
 
+            const totalRecipients = contacts.length || manualContacts;
+            if (totalRecipients === 0) {
+                setError("You must provide at least 1 recipient");
+                return;
+            }
+
+            if (user.currentCredit < totalCredits) {
+                setError("Insufficient credits to create this campaign");
+                return;
+            }
+
             try {
                 setLoading(true);
                 setError("");
 
-                // Simulate API call
-                await new Promise((resolve) => setTimeout(resolve, 1500));
+                await addDoc(collection(db, "campaigns"), {
+                    ...campaignData,
+                    contacts: contacts.length ? contacts : [],
+                    manualContacts: contacts.length ? 0 : manualContacts,
+                    totalContacts: totalRecipients,
+                    segments: messagesPerSMS,
+                    totalCredits,
+                    userId: user.uid,
+                    createdAt: serverTimestamp(),
+                    status: "pending",
+                });
+
+                // Deduct credits from user balance
+                const userRef = doc(db, "users", user.uid);
+                await updateDoc(userRef, {
+                    currentCredit: increment(-totalCredits),
+                });
 
                 setSuccess(true);
                 setLoading(false);
 
                 setTimeout(() => {
-                    navigate.push("/campaigns");
+                    navigate.push("/dashboard/campaigns");
                 }, 2000);
             } catch (err) {
                 console.error("Error creating campaign:", err);
@@ -137,8 +184,11 @@ export default function CreateCampaign() {
     };
 
     const messageLength = campaignData.message.length;
-    const messagesPerSMS = Math.ceil(messageLength / 160);
-    const totalCredits = contacts.length * messagesPerSMS;
+    const messagesPerSMS =
+        messageLength <= 160 ? 1 : messageLength <= 306 ? 2 : messageLength <= 459 ? 3 : Math.ceil(messageLength / 153);
+
+    const totalContacts = contacts.length || manualContacts;
+    const totalCredits = totalContacts * messagesPerSMS;
 
     if (success) {
         return (
@@ -153,13 +203,14 @@ export default function CreateCampaign() {
             </div>
         );
     }
+
     return (
         <UserDashboardLayout>
             <div className="container mx-auto py-8">
                 <div className="w-full ">
                     <h1 className="text-3xl font-bold mb-2">Create Campaign</h1>
                     <p className="text-muted-foreground mb-8">Send messages to your contacts</p>
-                    {/* Progress Steps */}
+
                     <div className="flex mb-8">
                         <div className={`flex-1 pb-4 border-b-2 ${step >= 1 ? "border-primary" : "border-muted"}`}>
                             <div
@@ -194,6 +245,7 @@ export default function CreateCampaign() {
                             </p>
                         </div>
                     </div>
+
                     {error && (
                         <Alert className="mb-6 bg-red-50 border-red-200">
                             <AlertCircle className="h-4 w-4 text-red-600" />
@@ -201,25 +253,25 @@ export default function CreateCampaign() {
                             <AlertDescription>{error}</AlertDescription>
                         </Alert>
                     )}
+
                     <form onSubmit={handleSubmit}>
                         {step === 1 && (
                             <div>
                                 <Card>
-                                    <CardContent className="pt-6">
-                                        <div className="mb-6">
+                                    <CardContent className="pt-6 space-y-6">
+                                        <div>
                                             <Label htmlFor="csv-file" className="block mb-2">
-                                                Upload Contacts (CSV)
+                                                Upload Contacts (CSV/Excel)
                                             </Label>
                                             <div className="border-2 border-dashed border-muted rounded-lg p-8 text-center">
                                                 <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
                                                 <p className="mb-2 text-sm text-muted-foreground">
-                                                    Drag and drop your CSV file here, or click to browse
+                                                    Drag and drop your CSV/Excel file here, or click to browse
                                                 </p>
-
                                                 <Input
                                                     id="csv-file"
                                                     type="file"
-                                                    accept=".csv"
+                                                    accept=".csv,.xls,.xlsx"
                                                     onChange={handleFileUpload}
                                                     className="hidden"
                                                     ref={fileInputRef}
@@ -227,9 +279,9 @@ export default function CreateCampaign() {
                                                 <Button
                                                     type="button"
                                                     variant="outline"
-                                                    onClick={() => fileInputRef.current?.click()} // safe with optional chaining
+                                                    onClick={() => fileInputRef.current?.click()}
                                                 >
-                                                    Select CSV File
+                                                    Select File
                                                 </Button>
                                                 {csvFile && (
                                                     <p className="mt-2 text-sm text-green-600">
@@ -238,6 +290,21 @@ export default function CreateCampaign() {
                                                 )}
                                             </div>
                                         </div>
+
+                                        <div>
+                                            <Label htmlFor="manualContacts" className="block mb-2">
+                                                Or enter total contacts manually
+                                            </Label>
+                                            <Input
+                                                id="manualContacts"
+                                                type="number"
+                                                min={1}
+                                                value={manualContacts}
+                                                onChange={(e) => setManualContacts(Number(e.target.value))}
+                                                placeholder="e.g. 500"
+                                            />
+                                        </div>
+
                                         {contactsPreview.length > 0 && (
                                             <div>
                                                 <h3 className="font-medium mb-2">
@@ -276,19 +343,21 @@ export default function CreateCampaign() {
                                         )}
                                     </CardContent>
                                 </Card>
+
                                 <div className="mt-6 flex justify-end">
-                                    <Button type="submit" disabled={!csvFile || loading}>
-                                        {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                    <Button type="submit" disabled={(!csvFile && manualContacts <= 0) || loading}>
+                                        {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                         Next Step
                                     </Button>
                                 </div>
                             </div>
                         )}
+
                         {step === 2 && (
                             <div>
                                 <Card className="mb-6">
-                                    <CardContent className="pt-6">
-                                        <div className="mb-4">
+                                    <CardContent className="pt-6 space-y-4">
+                                        <div>
                                             <Label htmlFor="name" className="block mb-2">
                                                 Campaign Name
                                             </Label>
@@ -301,7 +370,8 @@ export default function CreateCampaign() {
                                                 required
                                             />
                                         </div>
-                                        <div className="mb-4">
+
+                                        <div>
                                             <Label htmlFor="message" className="block mb-2">
                                                 Message
                                             </Label>
@@ -319,6 +389,7 @@ export default function CreateCampaign() {
                                                 <span>{messagesPerSMS} SMS per recipient</span>
                                             </div>
                                         </div>
+
                                         <Tabs defaultValue="now">
                                             <TabsList className="mb-4">
                                                 <TabsTrigger value="now">Send Now</TabsTrigger>
@@ -360,14 +431,15 @@ export default function CreateCampaign() {
                                         </Tabs>
                                     </CardContent>
                                 </Card>
+
                                 <Card className="mb-6 bg-muted/50">
-                                    <CardContent className="pt-6">
+                                    <CardContent className="">
                                         <div className="flex items-start">
                                             <Info className="h-5 w-5 mr-2 text-muted-foreground flex-shrink-0 mt-0.5" />
                                             <div>
                                                 <h3 className="font-medium mb-1">Campaign Summary</h3>
                                                 <ul className="text-sm text-muted-foreground space-y-1">
-                                                    <li>Recipients: {contacts.length} contacts</li>
+                                                    <li>Recipients: {totalContacts} contacts</li>
                                                     <li>
                                                         Message length: {messageLength} characters ({messagesPerSMS} SMS
                                                         per contact)
@@ -384,11 +456,21 @@ export default function CreateCampaign() {
                                         </div>
                                     </CardContent>
                                 </Card>
+
                                 <div className="mt-6 flex justify-between">
                                     <Button type="button" variant="outline" onClick={handleBack} disabled={loading}>
                                         Back
                                     </Button>
-                                    <Button type="submit" disabled={loading}>
+                                    <Button
+                                        type="submit"
+                                        disabled={
+                                            loading ||
+                                            !campaignData.name ||
+                                            !campaignData.message ||
+                                            totalContacts <= 0 ||
+                                            user?.currentCredit < totalCredits
+                                        }
+                                    >
                                         {loading ? (
                                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                         ) : (

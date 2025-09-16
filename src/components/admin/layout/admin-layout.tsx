@@ -1,18 +1,9 @@
-
-import {
-    Breadcrumb,
-    BreadcrumbItem,
-    BreadcrumbLink,
-    BreadcrumbList,
-    BreadcrumbPage,
-    BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
 import {Separator} from "@/components/ui/separator";
 import {SidebarInset, SidebarProvider, SidebarTrigger} from "@/components/ui/sidebar";
 import {ThemeToggler} from "@/components/ui/theme-toggler";
-import {ReactNode} from "react";
-import { AdminDashboardSidebar } from "./admin-sidebar";
 import PrivateRoute from "@/context/private-route-provider";
+import {ReactNode} from "react";
+import {AdminDashboardSidebar} from "./admin-sidebar";
 
 export default function AdminDashboardLayout({children}: {children: ReactNode}) {
     return (
@@ -25,17 +16,6 @@ export default function AdminDashboardLayout({children}: {children: ReactNode}) 
                             <div className="flex items-center gap-2">
                                 <SidebarTrigger className="-ml-1" />
                                 <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
-                                <Breadcrumb>
-                                    <BreadcrumbList>
-                                        <BreadcrumbItem className="hidden md:block">
-                                            <BreadcrumbLink href="#">Dashboard</BreadcrumbLink>
-                                        </BreadcrumbItem>
-                                        <BreadcrumbSeparator className="hidden md:block" />
-                                        <BreadcrumbItem>
-                                            <BreadcrumbPage>Data Fetching</BreadcrumbPage>
-                                        </BreadcrumbItem>
-                                    </BreadcrumbList>
-                                </Breadcrumb>
                             </div>
                             <ThemeToggler />
                         </div>

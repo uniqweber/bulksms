@@ -54,7 +54,7 @@ export default function PaymentsDialog({
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <Label className="text-muted-foreground text-sm">Payment ID</Label>
-                                <p className="font-medium">{selectedPayment.id}</p>
+                                <p className="font-medium truncate">{selectedPayment.id}</p>
                             </div>
                             <div>
                                 <Label className="text-muted-foreground text-sm">Status</Label>
