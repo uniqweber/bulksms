@@ -1,5 +1,6 @@
 "use client";
 
+import Loader from "@/components/shared/loader";
 import {useRouter} from "next/navigation";
 import {ReactNode, useEffect} from "react";
 import {useUser} from "./firebase-context";
@@ -22,7 +23,7 @@ const PrivateRoute: React.FC<PrivateRouteProps> = ({children, adminOnly = false}
     }, [user, loading, adminOnly, router]);
 
     if (loading || !user || (adminOnly && user.role !== "admin") || (!adminOnly && user?.role === "admin")) {
-        return <div>Loading...</div>;
+        return <Loader />;
     }
 
     return <>{children}</>;

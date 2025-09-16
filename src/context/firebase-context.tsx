@@ -3,7 +3,9 @@
 import {auth, db, storage} from "@/firebase";
 import {
     createUserWithEmailAndPassword,
+    EmailAuthProvider,
     User as FirebaseUser,
+    reauthenticateWithCredential,
     sendPasswordResetEmail,
     signInWithEmailAndPassword,
     signOut,
@@ -41,6 +43,7 @@ interface UserContextProps {
     updateProfileField: (fields: Partial<UserData>) => Promise<void>;
     changeDisplayName: (newName: string) => Promise<void>;
     changePassword: (newPassword: string) => Promise<void>;
+    reauthenticateAndChangePassword: (currentPassword: string, newPassword: string) => Promise<void>;
     createCampaign: (data: {name: string; message: string; file?: File}) => Promise<void>;
 }
 
@@ -61,6 +64,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({children}) => {
     const [user, setUser] = useState<UserData | null>(null);
     const [loading, setLoading] = useState(true);
 
+    // check if user is logged in
     useEffect(() => {
         const unsubscribe = auth.onAuthStateChanged(async (currentUser: FirebaseUser | null) => {
             if (currentUser) {
@@ -75,6 +79,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({children}) => {
         return () => unsubscribe();
     }, []);
 
+    // user register and data will be stored in firestore
     const register = async ({fullName, email, password}: {fullName: string; email: string; password: string}) => {
         const cred = await createUserWithEmailAndPassword(auth, email, password);
         await updateProfile(cred.user, {displayName: fullName});
@@ -96,29 +101,34 @@ export const UserProvider: React.FC<UserProviderProps> = ({children}) => {
         setUser(userData);
     };
 
+    // user login
     const login = async ({email, password}: {email: string; password: string}) => {
         const cred = await signInWithEmailAndPassword(auth, email, password);
         const docSnap = await getDoc(doc(db, "users", cred.user.uid));
         setUser({uid: cred.user.uid, ...docSnap.data()} as UserData);
     };
 
+    // user logout
     const logout = async () => {
         await signOut(auth);
         setUser(null);
     };
 
+    // reset password
     const resetPassword = async (email: string) => {
         await sendPasswordResetEmail(auth, email, {
             url: "http://localhost:3000/login", // redirect after click
         });
     };
 
+    // update user profile
     const updateProfileField = async (fields: Partial<UserData>) => {
         if (!user) throw new Error("No user logged in");
         await updateDoc(doc(db, "users", user.uid), fields);
         setUser((prev) => (prev ? {...prev, ...fields} : null));
     };
 
+    // update user display name
     const changeDisplayName = async (newName: string) => {
         if (!user) throw new Error("No user logged in");
         if (!auth.currentUser) throw new Error("No firebase user");
@@ -128,6 +138,16 @@ export const UserProvider: React.FC<UserProviderProps> = ({children}) => {
 
     const changePassword = async (newPassword: string) => {
         if (!auth.currentUser) throw new Error("No user logged in");
+        await updatePassword(auth.currentUser, newPassword);
+    };
+
+    //  reauthenticate with current password before updating
+    const reauthenticateAndChangePassword = async (currentPassword: string, newPassword: string) => {
+        if (!auth.currentUser || !auth.currentUser.email) {
+            throw new Error("No user logged in");
+        }
+        const credential = EmailAuthProvider.credential(auth.currentUser.email, currentPassword);
+        await reauthenticateWithCredential(auth.currentUser, credential);
         await updatePassword(auth.currentUser, newPassword);
     };
 
@@ -162,6 +182,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({children}) => {
                 updateProfileField,
                 changeDisplayName,
                 changePassword,
+                reauthenticateAndChangePassword,
                 createCampaign,
             }}
         >
