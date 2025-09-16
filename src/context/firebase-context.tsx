@@ -47,7 +47,7 @@ interface UserContextProps {
     createCampaign: (data: {name: string; message: string; file?: File}) => Promise<void>;
 }
 
-const DEFAULT_ADMIN_EMAIL = "admin@example.com";
+const DEFAULT_ADMIN_EMAIL = "admin@gmail.com";
 const UserContext = createContext<UserContextProps | undefined>(undefined);
 
 export const useUser = () => {
@@ -150,6 +150,8 @@ export const UserProvider: React.FC<UserProviderProps> = ({children}) => {
         await reauthenticateWithCredential(auth.currentUser, credential);
         await updatePassword(auth.currentUser, newPassword);
     };
+
+ 
 
     const createCampaign = async ({name, message, file}: {name: string; message: string; file?: File}) => {
         if (!user) throw new Error("No user logged in");

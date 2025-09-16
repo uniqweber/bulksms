@@ -1,9 +1,9 @@
-import {Alert, AlertDescription, AlertTitle} from "@/components/ui/alert";
 import {Button} from "@/components/ui/button";
 import {Card, CardContent} from "@/components/ui/card";
 import {Input} from "@/components/ui/input";
 import {Label} from "@/components/ui/label";
-import {AlertCircle, Copy} from "lucide-react";
+import {Copy} from "lucide-react";
+import PaymentWarning from "./payment-warning";
 
 export type PaymentMethod = "bitcoin" | "ethereum" | "usdc";
 
@@ -34,7 +34,7 @@ export default function PaymentTabContent({
 }: PaymentTabContentProps) {
     return (
         <Card>
-            <CardContent className="pt-6">
+            <CardContent className="">
                 <div className="mb-4">
                     <Label className="block mb-2">Send {option.name} to this address:</Label>
                     <div className="flex">
@@ -59,13 +59,7 @@ export default function PaymentTabContent({
                         <Input value={paymentDetails.memo} readOnly />
                     </div>
                 </div>
-                <Alert className="bg-card">
-                    <AlertCircle className="h-4 w-4 " />
-                    <AlertTitle className="text-amber-600">Important</AlertTitle>
-                    <AlertDescription className="text-amber-600">
-                        Include the memo/reference to ensure your payment is credited.
-                    </AlertDescription>
-                </Alert>
+                <PaymentWarning />
             </CardContent>
         </Card>
     );

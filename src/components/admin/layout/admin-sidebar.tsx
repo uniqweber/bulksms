@@ -10,12 +10,6 @@ import {SidebarUser} from "./admin-sidebar-user";
 
 // This is sample data.
 const data = {
-    user: {
-        name: "John Doe",
-        email: "m@example.com",
-        avatar: "/images/placeholder.jpg",
-    },
-
     routes: [
         {
             name: "Overview",
@@ -39,7 +33,7 @@ const data = {
         },
         {
             name: "Settings",
-            url: "/admin/settings",
+            url: "/admin/account",
             icon: User,
         },
     ],
@@ -55,7 +49,7 @@ export function AdminDashboardSidebar({...props}: React.ComponentProps<typeof Si
                 <SidebarLinks routes={data.routes} />
             </SidebarContent>
             <SidebarFooter>
-                <SidebarUser user={data.user} />
+                <SidebarUser />
             </SidebarFooter>
             <SidebarRail />
         </Sidebar>

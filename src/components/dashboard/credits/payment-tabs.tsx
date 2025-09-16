@@ -2,7 +2,7 @@ import {Button} from "@/components/ui/button";
 import {Tabs, TabsContent, TabsList, TabsTrigger} from "@/components/ui/tabs";
 import {Loader2} from "lucide-react";
 import PaymentTabContent from "./payment-tab-content";
-export type PaymentMethod = "bitcoin" | "ethereum" | "usdc";
+export type PaymentMethod = "bitcoin" | "erc20" | "trc20";
 
 export interface PaymentOption {
     id: string;
@@ -52,7 +52,7 @@ export default function PaymentTabs({
                 value={paymentMethod}
                 onValueChange={(value: string) => {
                     // Type guard
-                    if (value === "bitcoin" || value === "ethereum" || value === "usdc") {
+                    if (value === "bitcoin" || value === "erc20" || value === "trc20") {
                         handlePaymentMethodChange(value);
                     }
                 }}
@@ -85,9 +85,6 @@ export default function PaymentTabs({
                     {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Confirm Payment
                 </Button>
-                <p className="text-xs text-muted-foreground mt-2">
-                    For demo, clicking &quot;Confirm Payment&quot; simulates a successful payment.
-                </p>
             </div>
         </div>
     );

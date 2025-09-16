@@ -1,16 +1,28 @@
 "use client";
+
 import AdminDashboardLayout from "@/components/admin/layout/admin-layout";
-import PaymentsDialog from "@/components/admin/payments/payments-dialog";
-import PaymentsFilter from "@/components/admin/payments/payments-filter";
-import PaymentStats from "@/components/admin/payments/payments-stats";
+import {Badge} from "@/components/ui/badge";
 import {Button} from "@/components/ui/button";
+import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import {Input} from "@/components/ui/input";
+import {Label} from "@/components/ui/label";
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "@/components/ui/select";
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from "@/components/ui/table";
 import {db} from "@/firebase";
 import {collection, doc, increment, onSnapshot, Timestamp, updateDoc} from "firebase/firestore";
-import {Eye, Loader2} from "lucide-react";
+import {Eye, Loader2, Search} from "lucide-react";
 import Link from "next/link";
 import {useEffect, useState} from "react";
+
+// ✅ Payment type
 type Payment = {
     id: string;
     userId: string;
@@ -23,7 +35,7 @@ type Payment = {
     memo: string;
 };
 
-export default function Payments() {
+export default function AdminPaymentsTable() {
     const [payments, setPayments] = useState<Payment[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
@@ -53,6 +65,29 @@ export default function Payments() {
         return matchesSearch && matchesStatus && matchesMethod;
     });
 
+    const getPaymentStatusColor = (status: Payment["status"]): "default" | "outline" | "destructive" => {
+        switch (status) {
+            case "verified":
+                return "default";
+            case "pending":
+                return "outline";
+            case "rejected":
+                return "destructive";
+        }
+    };
+
+    const getTotalRevenue = (): number => {
+        return payments
+            .filter((payment) => payment.status === "verified")
+            .reduce((sum, payment) => sum + payment.amount, 0);
+    };
+
+    const getTotalCredits = (): number => {
+        return payments
+            .filter((payment) => payment.status === "verified")
+            .reduce((sum, payment) => sum + payment.credits, 0);
+    };
+
     const handleViewPayment = (payment: Payment) => {
         setSelectedPayment(payment);
         setIsViewDialogOpen(true);
@@ -72,17 +107,104 @@ export default function Payments() {
                     </div>
                 </div>
                 {/* Stats Cards */}
-                <PaymentStats payments={payments} />
-
-                <PaymentsFilter
-                    searchTerm={searchTerm}
-                    setSearchTerm={setSearchTerm}
-                    statusFilter={statusFilter}
-                    setStatusFilter={setStatusFilter}
-                    methodFilter={methodFilter}
-                    setMethodFilter={setMethodFilter}
-                />
-
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium text-muted-foreground">Total Revenue</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">${getTotalRevenue()}</div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                From {payments.filter((p) => p.status === "verified").length} payments
+                            </p>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium text-muted-foreground">
+                                Total Credits Sold
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">{getTotalCredits()}</div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                From {payments.filter((p) => p.status === "verified").length} payments
+                            </p>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium text-muted-foreground">
+                                Pending Payments
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">
+                                {payments.filter((p) => p.status === "pending").length}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                ${payments.filter((p) => p.status === "pending").reduce((sum, p) => sum + p.amount, 0)}{" "}
+                                pending
+                            </p>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium text-muted-foreground">
+                                Avg. Transaction
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">
+                                $
+                                {payments.length > 0
+                                    ? (payments.reduce((sum, p) => sum + p.amount, 0) / payments.length).toFixed(2)
+                                    : "0.00"}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                From {payments.filter((p) => p.status === "verified").length} payments
+                            </p>
+                        </CardContent>
+                    </Card>
+                </div>
+                {/* Search and Filters */}
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+                    <div className="relative">
+                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            type="search"
+                            placeholder="Search payments..."
+                            className="pl-8 w-full md:w-[350px]"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+                    <div className="mt-4 md:mt-0 flex items-center gap-4">
+                        <Select value={statusFilter} onValueChange={setStatusFilter}>
+                            <SelectTrigger className="w-[150px]">
+                                <SelectValue placeholder="Status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Statuses</SelectItem>
+                                <SelectItem value="verified">Verified</SelectItem>
+                                <SelectItem value="pending">Pending</SelectItem>
+                                <SelectItem value="rejected">Rejected</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <Select value={methodFilter} onValueChange={setMethodFilter}>
+                            <SelectTrigger className="w-[150px]">
+                                <SelectValue placeholder="Payment Method" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Methods</SelectItem>
+                                <SelectItem value="bitcoin">Bitcoin</SelectItem>
+                                <SelectItem value="erc20">ERC20</SelectItem>
+                                <SelectItem value="trc20">TRC20</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+                {/* Payments Table */}
                 <div>
                     <div>
                         {loading ? (
@@ -203,12 +325,70 @@ export default function Payments() {
                         )}
                     </div>
                 </div>
-
-                <PaymentsDialog
-                    isViewDialogOpen={isViewDialogOpen}
-                    setIsViewDialogOpen={setIsViewDialogOpen}
-                    selectedPayment={selectedPayment}
-                />
+                {/* View Payment Dialog */}
+                <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Payment Details</DialogTitle>
+                            <DialogDescription>Detailed information about the payment transaction.</DialogDescription>
+                        </DialogHeader>
+                        {selectedPayment && (
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <Label className="text-muted-foreground text-sm">Payment ID</Label>
+                                        <p className="font-medium">{selectedPayment.id}</p>
+                                    </div>
+                                    <div>
+                                        <Label className="text-muted-foreground text-sm">Status</Label>
+                                        <div>
+                                            <Badge variant={getPaymentStatusColor(selectedPayment.status)}>
+                                                {selectedPayment.status}
+                                            </Badge>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <Label className="text-muted-foreground text-sm">User</Label>
+                                        <p className="font-medium">{selectedPayment.userName}</p>
+                                    </div>
+                                    <div>
+                                        <Label className="text-muted-foreground text-sm">User ID</Label>
+                                        <p className="font-medium truncate">{selectedPayment.userId}</p>
+                                    </div>
+                                    <div>
+                                        <Label className="text-muted-foreground text-sm">Amount</Label>
+                                        <p className="font-medium">${selectedPayment.amount}</p>
+                                    </div>
+                                    <div>
+                                        <Label className="text-muted-foreground text-sm">Credits</Label>
+                                        <p className="font-medium">{selectedPayment.credits}</p>
+                                    </div>
+                                    <div>
+                                        <Label className="text-muted-foreground text-sm">Payment Method</Label>
+                                        <p className="font-medium capitalize">{selectedPayment.method}</p>
+                                    </div>
+                                    <div>
+                                        <Label className="text-muted-foreground text-sm">Date</Label>
+                                        <p className="font-medium">
+                                            {selectedPayment.createdAt?.toDate
+                                                ? selectedPayment.createdAt.toDate().toLocaleString()
+                                                : "-"}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div>
+                                    <Label className="text-muted-foreground text-sm">Transaction Memo</Label>
+                                    <div className="mt-1 p-3 bg-muted rounded-md">
+                                        <p className="font-mono text-sm break-all">{selectedPayment.memo}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        <DialogFooter>
+                            <Button onClick={() => setIsViewDialogOpen(false)}>Close</Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
             </div>
         </AdminDashboardLayout>
     );

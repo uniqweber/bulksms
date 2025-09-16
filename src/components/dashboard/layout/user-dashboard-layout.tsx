@@ -1,19 +1,14 @@
 import {DashboardSidebar} from "@/components/dashboard/layout/user-dashboard-sidebar";
-import {
-    Breadcrumb,
-    BreadcrumbItem,
-    BreadcrumbLink,
-    BreadcrumbList,
-    BreadcrumbPage,
-    BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
+import {Button} from "@/components/ui/button";
 import {Separator} from "@/components/ui/separator";
 import {SidebarInset, SidebarProvider, SidebarTrigger} from "@/components/ui/sidebar";
 import {ThemeToggler} from "@/components/ui/theme-toggler";
 import PrivateRoute from "@/context/private-route-provider";
+import useCurrentCredits from "@/hooks/use-current-credit";
 import {ReactNode} from "react";
 
 export default function UserDashboardLayout({children}: {children: ReactNode}) {
+    const credits = useCurrentCredits();
     return (
         <PrivateRoute>
             <SidebarProvider>
@@ -24,19 +19,14 @@ export default function UserDashboardLayout({children}: {children: ReactNode}) {
                             <div className="flex items-center gap-2">
                                 <SidebarTrigger className="-ml-1" />
                                 <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
-                                <Breadcrumb>
-                                    <BreadcrumbList>
-                                        <BreadcrumbItem className="hidden md:block">
-                                            <BreadcrumbLink href="#">Dashboard</BreadcrumbLink>
-                                        </BreadcrumbItem>
-                                        <BreadcrumbSeparator className="hidden md:block" />
-                                        <BreadcrumbItem>
-                                            <BreadcrumbPage>Data Fetching</BreadcrumbPage>
-                                        </BreadcrumbItem>
-                                    </BreadcrumbList>
-                                </Breadcrumb>
                             </div>
-                            <ThemeToggler />
+                            <div className="flex items-center  gap-4">
+                                <Button variant="outline">
+                                    Credits :<span className="font-semibold">{credits}</span>
+                                </Button>
+
+                                <ThemeToggler />
+                            </div>
                         </div>
                     </header>
                     <div className="p-4 pt-0">{children}</div>

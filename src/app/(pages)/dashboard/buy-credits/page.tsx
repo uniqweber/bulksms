@@ -6,6 +6,10 @@ import PaymentTabs from "@/components/dashboard/credits/payment-tabs";
 import SuccessMsg from "@/components/dashboard/credits/success-msg";
 import UserDashboardLayout from "@/components/dashboard/layout/user-dashboard-layout";
 import {Alert, AlertDescription, AlertTitle} from "@/components/ui/alert";
+import {useUser} from "@/context/firebase-context";
+import {db} from "@/firebase";
+import {generateMemo} from "@/lib/sms";
+import {addDoc, collection, serverTimestamp} from "firebase/firestore";
 import {AlertCircle, Bitcoin, CreditCard} from "lucide-react";
 import {useEffect, useState} from "react";
 
@@ -14,21 +18,21 @@ type PaymentDetails = {
     amount: number | string;
     memo: string;
 };
-type PaymentMethod = "bitcoin" | "ethereum" | "usdc";
+type PaymentMethod = "bitcoin" | "erc20" | "trc20";
 
 export default function BuyCredits() {
-    const currentUser = {displayName: "John Doe", uid: "user123"};
+    const {user} = useUser();
 
     const packages = [
-        {id: "starter", name: "Starter", credits: 500, price: 25, popular: false},
-        {id: "business", name: "Business", credits: 2500, price: 100, popular: true},
-        {id: "enterprise", name: "Enterprise", credits: 10000, price: 400, popular: false},
+        {id: "starter", name: "Starter", credits: 500, price: 500 * 0.12, popular: false}, // $60
+        {id: "business", name: "Business", credits: 2000, price: 2000 * 0.12, popular: true}, // $300
+        {id: "enterprise", name: "Enterprise", credits: 10000, price: 10000 * 0.12, popular: false}, // $1200
     ];
 
     const cryptoOptions = [
         {id: "bitcoin", name: "Bitcoin", icon: <Bitcoin className="h-5 w-5" />},
-        {id: "ethereum", name: "Ethereum", icon: <CreditCard className="h-5 w-5" />},
-        {id: "usdc", name: "USDC", icon: <CreditCard className="h-5 w-5" />},
+        {id: "erc20", name: "ERC20", icon: <CreditCard className="h-5 w-5" />},
+        {id: "trc20", name: "TRC20", icon: <CreditCard className="h-5 w-5" />},
     ];
 
     // State
@@ -49,16 +53,16 @@ export default function BuyCredits() {
         if (!selectedPackage) return; // nothing to update if no package selected
 
         const mockAddresses: Record<PaymentMethod, string> = {
-            bitcoin: "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
-            ethereum: "0x71C7656EC7ab88b098defB751B7401B5f6d8976F",
-            usdc: "0x71C7656EC7ab88b098defB751B7401B5f6d8976F",
+            bitcoin: "bc1q7m3u6sagfncz92zkcn8z3hcsgums7xnyaz0m6f",
+            erc20: "0xA47d7aD770c6d280df94C3AF0b171fD4b7BF9AaC",
+            trc20: "TJwWtYKLUSn4q8ZUX1XkAdjRAM4VVxXJ1v",
         };
         setPaymentDetails({
             address: mockAddresses[paymentMethod],
             amount: selectedPackage.price,
-            memo: `BulkSMS-${currentUser?.uid.substring(0, 8) || "user"}`,
+            memo: generateMemo(8),
         });
-    }, [paymentMethod, selectedPackage, currentUser?.uid]);
+    }, [paymentMethod, selectedPackage]);
 
     const handlePackageSelect = (pkg: (typeof packages)[0]) => {
         setSelectedPackage(pkg);
@@ -84,8 +88,19 @@ export default function BuyCredits() {
             setLoading(true);
             setError("");
 
-            // Simulate API/payment call
-            await new Promise((resolve) => setTimeout(resolve, 1500));
+            await addDoc(collection(db, "cryptoPayments"), {
+                userId: user?.uid,
+                userName: user?.displayName || "",
+                packageId: selectedPackage.id,
+                packageName: selectedPackage.name,
+                credits: selectedPackage.credits,
+                amount: selectedPackage.price,
+                method: paymentMethod,
+                address: paymentDetails.address,
+                memo: paymentDetails.memo,
+                status: "pending",
+                createdAt: serverTimestamp(),
+            });
 
             setSuccess(true);
             setLoading(false);

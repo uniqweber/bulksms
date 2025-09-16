@@ -1,12 +1,13 @@
 "use client";
 
 import AdminDashboardLayout from "@/components/admin/layout/admin-layout";
+import UsersTable from "@/components/admin/users/users-table";
 import {Badge} from "@/components/ui/badge";
 import {Button} from "@/components/ui/button";
 import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
-import {Input} from "@/components/ui/input";
 import {Tabs, TabsContent, TabsList, TabsTrigger} from "@/components/ui/tabs";
-import {CreditCard, Loader2, MessageSquare, MoreHorizontal, Search, Users} from "lucide-react";
+import useAllUsers from "@/hooks/use-all-users";
+import {CreditCard, Loader2, MessageSquare, MoreHorizontal, Users} from "lucide-react";
 import Link from "next/link";
 import {useEffect, useState} from "react";
 
@@ -54,8 +55,9 @@ type Stats = {
 export default function AdminDashboard() {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [activeTab, setActiveTab] = useState<"users" | "campaigns" | "payments">("users");
+    const {users} = useAllUsers();
     const [loading, setLoading] = useState(true);
-    const [searchTerm, setSearchTerm] = useState("");
+
     const [stats, setStats] = useState<Stats>({
         totalUsers: 0,
         totalCampaigns: 0,
@@ -63,7 +65,6 @@ export default function AdminDashboard() {
         activeUsers: 0,
     });
 
-    const [users, setUsers] = useState<User[]>([]);
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [payments, setPayments] = useState<Payment[]>([]);
 
@@ -72,109 +73,6 @@ export default function AdminDashboard() {
             setLoading(true);
             try {
                 await new Promise((resolve) => setTimeout(resolve, 1000));
-
-                // Mock Users
-                const mockUsers: User[] = [
-                    {
-                        id: "user1",
-                        name: "John Doe",
-                        email: "john@example.com",
-                        credits: 2500,
-                        status: "active",
-                        campaigns: 12,
-                        lastActive: "2023-06-15",
-                    },
-                    {
-                        id: "user2",
-                        name: "Jane Smith",
-                        email: "jane@example.com",
-                        credits: 500,
-                        status: "active",
-                        campaigns: 5,
-                        lastActive: "2023-06-14",
-                    },
-                    {
-                        id: "user3",
-                        name: "Bob Johnson",
-                        email: "bob@example.com",
-                        credits: 0,
-                        status: "inactive",
-                        campaigns: 0,
-                        lastActive: "2023-05-20",
-                    },
-                    {
-                        id: "user4",
-                        name: "Alice Brown",
-                        email: "alice@example.com",
-                        credits: 10000,
-                        status: "active",
-                        campaigns: 25,
-                        lastActive: "2023-06-15",
-                    },
-                    {
-                        id: "user5",
-                        name: "Charlie Wilson",
-                        email: "charlie@example.com",
-                        credits: 1500,
-                        status: "active",
-                        campaigns: 8,
-                        lastActive: "2023-06-10",
-                    },
-                ];
-
-                // Mock Campaigns
-                const mockCampaigns: Campaign[] = [
-                    {
-                        id: "camp1",
-                        name: "Summer Promotion",
-                        userId: "user1",
-                        userName: "John Doe",
-                        contacts: 1200,
-                        status: "completed",
-                        sentAt: "2023-06-10",
-                        deliveryRate: 98,
-                    },
-                    {
-                        id: "camp2",
-                        name: "New Product Launch",
-                        userId: "user4",
-                        userName: "Alice Brown",
-                        contacts: 5000,
-                        status: "completed",
-                        sentAt: "2023-06-12",
-                        deliveryRate: 97,
-                    },
-                    {
-                        id: "camp3",
-                        name: "Customer Survey",
-                        userId: "user2",
-                        userName: "Jane Smith",
-                        contacts: 350,
-                        status: "completed",
-                        sentAt: "2023-06-13",
-                        deliveryRate: 99,
-                    },
-                    {
-                        id: "camp4",
-                        name: "Weekly Newsletter",
-                        userId: "user1",
-                        userName: "John Doe",
-                        contacts: 1100,
-                        status: "scheduled",
-                        sentAt: "2023-06-17",
-                        deliveryRate: null,
-                    },
-                    {
-                        id: "camp5",
-                        name: "Flash Sale",
-                        userId: "user5",
-                        userName: "Charlie Wilson",
-                        contacts: 800,
-                        status: "completed",
-                        sentAt: "2023-06-09",
-                        deliveryRate: 96,
-                    },
-                ];
 
                 // Mock Payments
                 const mockPayments: Payment[] = [
@@ -230,13 +128,12 @@ export default function AdminDashboard() {
                     },
                 ];
 
-                setUsers(mockUsers);
                 setCampaigns(mockCampaigns);
                 setPayments(mockPayments);
 
                 // Stats
                 setStats({
-                    totalUsers: mockUsers.length,
+                    totalUsers: users.length,
                     totalCampaigns: mockCampaigns.length,
                     totalRevenue: mockPayments.reduce(
                         (sum, payment) => sum + (payment.status === "completed" ? payment.amount : 0),
@@ -253,25 +150,6 @@ export default function AdminDashboard() {
 
         fetchData();
     }, []);
-
-    // Filtering
-    const filteredUsers = users.filter(
-        (u) =>
-            u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            u.email.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    const filteredCampaigns = campaigns.filter(
-        (c) =>
-            c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            c.userName.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    const filteredPayments = payments.filter(
-        (p) =>
-            p.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            p.method.toLowerCase().includes(searchTerm.toLowerCase())
-    );
 
     return (
         <AdminDashboardLayout>
@@ -358,16 +236,6 @@ export default function AdminDashboard() {
                                 <CreditCard className="h-4 w-4 mr-2" /> Payments
                             </TabsTrigger>
                         </TabsList>
-                        <div className="mt-4 md:mt-0 md:ml-4 relative">
-                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                type="search"
-                                placeholder="Search..."
-                                className="pl-8 w-full md:w-[250px]"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                            />
-                        </div>
                     </div>
                     {/* Content */}
                     {loading ? (
@@ -378,65 +246,9 @@ export default function AdminDashboard() {
                         <div>
                             {/* Users Tab */}
                             <TabsContent value="users" className="mt-0">
-                                <Card>
-                                    <CardContent className="p-0">
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full">
-                                                <thead>
-                                                    <tr className="border-b">
-                                                        <th className="text-left p-4 font-medium">Name</th>
-                                                        <th className="text-left p-4 font-medium">Email</th>
-                                                        <th className="text-left p-4 font-medium">Credits</th>
-                                                        <th className="text-left p-4 font-medium">Status</th>
-                                                        <th className="text-left p-4 font-medium">Campaigns</th>
-                                                        <th className="text-left p-4 font-medium">Last Active</th>
-                                                        <th className="text-left p-4 font-medium">Actions</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {filteredUsers.length > 0 ? (
-                                                        filteredUsers.map((user) => (
-                                                            <tr key={user.id} className="border-b hover:bg-muted/50">
-                                                                <td className="p-4">{user.name}</td>
-                                                                <td className="p-4">{user.email}</td>
-                                                                <td className="p-4">{user.credits}</td>
-                                                                <td className="p-4">
-                                                                    <Badge
-                                                                        variant={
-                                                                            user.status === "active"
-                                                                                ? "default"
-                                                                                : "secondary"
-                                                                        }
-                                                                    >
-                                                                        {user.status}
-                                                                    </Badge>
-                                                                </td>
-                                                                <td className="p-4">{user.campaigns}</td>
-                                                                <td className="p-4">{user.lastActive}</td>
-                                                                <td className="p-4">
-                                                                    <Button variant="ghost" size="icon">
-                                                                        <MoreHorizontal className="h-4 w-4" />
-                                                                    </Button>
-                                                                </td>
-                                                            </tr>
-                                                        ))
-                                                    ) : (
-                                                        <tr>
-                                                            <td
-                                                                colSpan={7}
-                                                                className="p-4 text-center text-muted-foreground"
-                                                            >
-                                                                No users found
-                                                            </td>
-                                                        </tr>
-                                                    )}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </CardContent>
-                                </Card>
+                                <UsersTable users={users.slice(0, 10)} loading={loading} />
                             </TabsContent>
-                            {/* Campaigns Tab */}
+
                             <TabsContent value="campaigns" className="mt-0">
                                 <Card>
                                     <CardContent className="p-0">
@@ -454,8 +266,8 @@ export default function AdminDashboard() {
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    {filteredCampaigns.length > 0 ? (
-                                                        filteredCampaigns.map((campaign) => (
+                                                    {campaigns.length > 0 ? (
+                                                        campaigns.map((campaign) => (
                                                             <tr
                                                                 key={campaign.id}
                                                                 className="border-b hover:bg-muted/50"
@@ -524,8 +336,8 @@ export default function AdminDashboard() {
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    {filteredPayments.length > 0 ? (
-                                                        filteredPayments.map((payment) => (
+                                                    {payments.length > 0 ? (
+                                                        payments.map((payment) => (
                                                             <tr key={payment.id} className="border-b hover:bg-muted/50">
                                                                 <td className="p-4">{payment.id}</td>
                                                                 <td className="p-4">{payment.userName}</td>

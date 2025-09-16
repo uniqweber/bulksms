@@ -1,5 +1,6 @@
 import {Button} from "@/components/ui/button";
 import {Check} from "lucide-react";
+import Link from "next/link";
 
 export default function SuccessMsg({credits}: {credits: number}) {
     return (
@@ -11,10 +12,10 @@ export default function SuccessMsg({credits}: {credits: number}) {
             <p className="text-muted-foreground mb-6">Your account has been credited with {credits} SMS credits.</p>
             <div className="flex justify-center gap-4">
                 <Button asChild>
-                    <a href="/dashboard">Go to Dashboard</a>
+                    <Link href="/dashboard/billings">Go to Billings</Link>
                 </Button>
                 <Button variant="outline" asChild>
-                    <a href="/campaigns/create">Create Campaign</a>
+                    <Link href="/dashboard/create-campaign">Create Campaign</Link>
                 </Button>
             </div>
         </div>
