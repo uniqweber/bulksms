@@ -1,227 +1,204 @@
 "use client";
 
 import AdminDashboardLayout from "@/components/admin/layout/admin-layout";
-import {Badge} from "@/components/ui/badge";
 import {Button} from "@/components/ui/button";
 import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
+import {Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle} from "@/components/ui/dialog";
 import {Input} from "@/components/ui/input";
-import {Label} from "@/components/ui/label";
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "@/components/ui/select";
-import {AlertCircle, Eye, Loader2, Search} from "lucide-react";
-import Link from "next/link";
+import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from "@/components/ui/table";
+import {db} from "@/firebase";
+import {collection, doc, onSnapshot, query, Timestamp, updateDoc} from "firebase/firestore";
+import {Download, Loader2, Pencil, Search} from "lucide-react";
 import {useEffect, useState} from "react";
 
-// --- Campaign type ---
+// ------------------- Types -------------------
 interface Campaign {
     id: string;
-    name: string;
     userId: string;
-    userName: string;
-    contacts: number;
-    status: "completed" | "scheduled" | "failed";
-    sentAt: string;
-    deliveryRate: number | null;
+    name: string;
     message: string;
+    contactCount: number;
+    segments: number;
+    driveLink: string;
+    requiredCredits: number;
+    delivered: number;
+    createdAt: Timestamp;
+    scheduledAt: string | Timestamp;
+    status: "completed" | "scheduled" | "failed";
 }
 
+// ------------------- Campaign Table -------------------
+interface CampaignTableProps {
+    campaigns: Campaign[];
+    onStatusChange: (id: string, newStatus: Campaign["status"]) => void;
+    onUpdateDelivered: (campaign: Campaign) => void;
+}
+const CampaignTable: React.FC<CampaignTableProps> = ({campaigns, onStatusChange, onUpdateDelivered}) => (
+    <div className="overflow-x-auto">
+        <Table className=" border">
+            <TableHeader>
+                <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Message</TableHead>
+                    <TableHead>Recipients</TableHead>
+                    <TableHead>Segments</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead>Delivery Date</TableHead>
+                    <TableHead>Delivered</TableHead>
+                    <TableHead>Status</TableHead>
+                </TableRow>
+            </TableHeader>
+            <TableBody>
+                {campaigns.map((c) => (
+                    <TableRow key={c.id}>
+                        <TableCell>{c.name}</TableCell>
+                        <TableCell className=" max-w-sm pr-5 break-words whitespace-normal ">
+                            <div className="">{c.message}</div>
+                        </TableCell>
+                        <TableCell>
+                            <div className="flex items-center  gap-2 ">
+                                <div>{c.contactCount}</div>
+                                <a href={c.driveLink} target="_blank" className="text-blue-600">
+                                    <Download size={16} />
+                                </a>
+                            </div>
+                        </TableCell>
+                        <TableCell className="text-center">{c.segments}</TableCell>
+                        <TableCell>{c.createdAt.toDate().toLocaleDateString()}</TableCell>
+                        <TableCell>
+                            {c.scheduledAt === "instant"
+                                ? "Instant"
+                                : new Date(c.scheduledAt.toString()).toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                            <div className="flex items-center">
+                                {c.delivered}
+                                <Button variant="ghost" size="icon" onClick={() => onUpdateDelivered(c)}>
+                                    <Pencil size={16} />
+                                </Button>
+                            </div>
+                        </TableCell>
+                        <TableCell>
+                            <Select
+                                value={c.status}
+                                onValueChange={(value: Campaign["status"]) => onStatusChange(c.id, value)}
+                            >
+                                <SelectTrigger
+                                    className={`
+                                 px-2 py-1 rounded-full text-sm font-semibold
+                                 ${c.status === "completed" ? "bg-green-100 text-green-800" : ""}
+                                 ${c.status === "scheduled" ? "bg-blue-100 text-blue-800" : ""}
+                                 ${c.status === "failed" ? "bg-red-100 text-red-800" : ""}
+                                `}
+                                >
+                                    <SelectValue>{c.status.charAt(0).toUpperCase() + c.status.slice(1)}</SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="completed">Completed</SelectItem>
+                                    <SelectItem value="scheduled">Scheduled</SelectItem>
+                                    <SelectItem value="failed">Failed</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </TableCell>
+                    </TableRow>
+                ))}
+            </TableBody>
+        </Table>
+    </div>
+);
+
+// ------------------- Admin Dashboard -------------------
 export default function AdminCampaigns() {
-    const [loading, setLoading] = useState<boolean>(true);
-    const [searchTerm, setSearchTerm] = useState<string>("");
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [searchTerm, setSearchTerm] = useState("");
+    const [statusFilter, setStatusFilter] = useState("all");
+    const [sortBy, setSortBy] = useState("date");
+
+    // Delivered modal
+    const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
-    const [isViewDialogOpen, setIsViewDialogOpen] = useState<boolean>(false);
-    const [statusFilter, setStatusFilter] = useState<"all" | "completed" | "scheduled" | "failed">("all");
+    const [deliveredValue, setDeliveredValue] = useState<number>(0);
 
     useEffect(() => {
-        const fetchCampaigns = async () => {
-            setLoading(true);
-            try {
-                await new Promise((resolve) => setTimeout(resolve, 1000));
-
-                const mockCampaigns: Campaign[] = [
-                    {
-                        id: "camp1",
-                        name: "Summer Promotion",
-                        userId: "user1",
-                        userName: "John Doe",
-                        contacts: 1200,
-                        status: "completed",
-                        sentAt: "2023-06-10",
-                        deliveryRate: 98,
-                        message:
-                            "Get 20% off on all summer products! Use code SUMMER20 at checkout. Valid until June 30th.",
-                    },
-                    {
-                        id: "camp2",
-                        name: "New Product Launch",
-                        userId: "user4",
-                        userName: "Alice Brown",
-                        contacts: 5000,
-                        status: "completed",
-                        sentAt: "2023-06-12",
-                        deliveryRate: 97,
-                        message:
-                            "Introducing our new product line! Check it out at example.com/new. Limited stock available.",
-                    },
-                    {
-                        id: "camp3",
-                        name: "Customer Survey",
-                        userId: "user2",
-                        userName: "Jane Smith",
-                        contacts: 350,
-                        status: "completed",
-                        sentAt: "2023-06-13",
-                        deliveryRate: 99,
-                        message:
-                            "We value your feedback! Please take our quick survey at survey.example.com/feedback to help us improve.",
-                    },
-                    {
-                        id: "camp4",
-                        name: "Weekly Newsletter",
-                        userId: "user1",
-                        userName: "John Doe",
-                        contacts: 1100,
-                        status: "scheduled",
-                        sentAt: "2023-06-17",
-                        deliveryRate: null,
-                        message:
-                            "This week's top stories: 1. Industry news 2. Tips and tricks 3. Upcoming events. Read more at newsletter.example.com",
-                    },
-                    {
-                        id: "camp5",
-                        name: "Flash Sale",
-                        userId: "user5",
-                        userName: "Charlie Wilson",
-                        contacts: 800,
-                        status: "completed",
-                        sentAt: "2023-06-09",
-                        deliveryRate: 96,
-                        message:
-                            "FLASH SALE! 50% off everything for the next 24 hours only. Shop now at example.com/sale",
-                    },
-                    {
-                        id: "camp6",
-                        name: "Appointment Reminder",
-                        userId: "user3",
-                        userName: "Bob Johnson",
-                        contacts: 75,
-                        status: "failed",
-                        sentAt: "2023-06-11",
-                        deliveryRate: 45,
-                        message:
-                            "Reminder: Your appointment is scheduled for tomorrow at 2:00 PM. Reply YES to confirm or NO to reschedule.",
-                    },
-                ];
-
-                setCampaigns(mockCampaigns);
-            } catch (error) {
-                console.error("Error fetching campaigns:", error);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchCampaigns();
+        const q = query(collection(db, "campaigns"));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const data: Campaign[] = snapshot.docs.map((doc) => {
+                const d = doc.data();
+                return {
+                    id: doc.id,
+                    userId: d.userId,
+                    name: d.name,
+                    message: d.message || "",
+                    contactCount: d.contactCount || 0,
+                    driveLink: d.driveLink || "",
+                    segments: d.segments || 0,
+                    requiredCredits: d.requiredCredits || 0,
+                    delivered: d.delivered || 0,
+                    status: d.status,
+                    createdAt: d.createdAt,
+                    scheduledAt: d.scheduledAt || "",
+                };
+            });
+            setCampaigns(data);
+            setLoading(false);
+        });
+        return () => unsubscribe();
     }, []);
 
-    const filteredCampaigns = campaigns.filter((campaign) => {
-        const matchesSearch =
-            campaign.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            campaign.userName.toLowerCase().includes(searchTerm.toLowerCase());
-
-        const matchesStatus = statusFilter === "all" || campaign.status === statusFilter;
-
-        return matchesSearch && matchesStatus;
-    });
-
-    const handleViewCampaign = (campaign: Campaign) => {
-        setSelectedCampaign(campaign);
-        setIsViewDialogOpen(true);
-    };
-
-    const getCampaignStatusColor = (
-        status: Campaign["status"]
-    ): "default" | "outline" | "destructive" | "secondary" => {
-        switch (status) {
-            case "completed":
-                return "default";
-            case "scheduled":
-                return "outline";
-            case "failed":
-                return "destructive";
-            default:
-                return "secondary";
+    // ------------------- Handlers -------------------
+    const handleStatusChange = async (id: string, status: Campaign["status"]) => {
+        try {
+            await updateDoc(doc(db, "campaigns", id), {status});
+        } catch (err) {
+            console.error(err);
         }
     };
 
+    const handleUpdateDelivered = (campaign: Campaign) => {
+        setSelectedCampaign(campaign);
+        setDeliveredValue(campaign.delivered);
+        setIsModalOpen(true);
+    };
+
+    const handleSaveDelivered = async () => {
+        if (!selectedCampaign) return;
+        try {
+            await updateDoc(doc(db, "campaigns", selectedCampaign.id), {delivered: deliveredValue});
+            setIsModalOpen(false);
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const filteredCampaigns = campaigns
+        .filter((c) => {
+            const matchesSearch =
+                c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                c.message.toLowerCase().includes(searchTerm.toLowerCase());
+            const matchesStatus = statusFilter === "all" || c.status === statusFilter;
+            return matchesSearch && matchesStatus;
+        })
+        .sort((a, b) => {
+            if (sortBy === "date") return b.createdAt.toDate().getTime() - a.createdAt.toDate().getTime();
+            if (sortBy === "name") return a.name.localeCompare(b.name);
+            return 0;
+        });
+
+    if (loading)
+        return (
+            <div className="flex justify-center items-center h-[calc(100vh-4rem)]">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+        );
+
     return (
         <AdminDashboardLayout>
-            <div className="container mx-auto py-8 px-4">
-                {/* Header */}
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
-                    <div>
-                        <h1 className="text-3xl font-bold">Campaign Management</h1>
-                        <p className="text-muted-foreground">Monitor and manage all SMS campaigns</p>
-                    </div>
-                    <div className="mt-4 md:mt-0">
-                        <Button asChild variant="outline">
-                            <Link href="/admin">Back to Dashboard</Link>
-                        </Button>
-                    </div>
+            <div className="container mx-auto py-8">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
+                    <h1 className="text-3xl font-bold">All Campaigns</h1>
                 </div>
-
-                {/* Search + Filters */}
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
-                    <div className="relative">
-                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input
-                            type="search"
-                            placeholder="Search campaigns..."
-                            className="pl-8 w-full md:w-[350px]"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                    </div>
-                    <div className="mt-4 md:mt-0 flex items-center gap-4">
-                        <Select
-                            value={statusFilter}
-                            onValueChange={(value) =>
-                                setStatusFilter(value as "all" | "completed" | "scheduled" | "failed")
-                            }
-                        >
-                            <SelectTrigger className="w-[180px]">
-                                <SelectValue placeholder="Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Statuses</SelectItem>
-                                <SelectItem value="completed">Completed</SelectItem>
-                                <SelectItem value="scheduled">Scheduled</SelectItem>
-                                <SelectItem value="failed">Failed</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <Select defaultValue="newest">
-                            <SelectTrigger className="w-[180px]">
-                                <SelectValue placeholder="Sort by" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="newest">Newest First</SelectItem>
-                                <SelectItem value="oldest">Oldest First</SelectItem>
-                                <SelectItem value="name">Name (A-Z)</SelectItem>
-                                <SelectItem value="contacts">Contacts (High-Low)</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </div>
-
-                {/* Stats */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                     <Card>
                         <CardHeader className="pb-2">
@@ -253,156 +230,68 @@ export default function AdminCampaigns() {
                     </Card>
                     <Card>
                         <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-medium text-muted-foreground">
-                                Avg. Delivery Rate
-                            </CardTitle>
+                            <CardTitle className="text-sm font-medium text-muted-foreground">Failed</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold">
-                                {campaigns.filter((c) => c.deliveryRate).length > 0
-                                    ? (
-                                          campaigns.reduce((sum, c) => sum + (c.deliveryRate || 0), 0) /
-                                          campaigns.filter((c) => c.deliveryRate).length
-                                      ).toFixed(1) + "%"
-                                    : "N/A"}
+                                {campaigns.filter((c) => c.status === "failed").length}
                             </div>
                         </CardContent>
                     </Card>
                 </div>
 
-                {/* Table */}
-                <Card>
-                    <CardContent className="p-0">
-                        {loading ? (
-                            <div className="flex items-center justify-center py-12">
-                                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                            </div>
-                        ) : (
-                            <div className="overflow-x-auto">
-                                <table className="w-full">
-                                    <thead>
-                                        <tr className="border-b">
-                                            <th className="text-left p-4 font-medium">Campaign Name</th>
-                                            <th className="text-left p-4 font-medium">User</th>
-                                            <th className="text-left p-4 font-medium">Contacts</th>
-                                            <th className="text-left p-4 font-medium">Status</th>
-                                            <th className="text-left p-4 font-medium">Sent Date</th>
-                                            <th className="text-left p-4 font-medium">Delivery Rate</th>
-                                            <th className="text-left p-4 font-medium">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {filteredCampaigns.length > 0 ? (
-                                            filteredCampaigns.map((campaign) => (
-                                                <tr key={campaign.id} className="border-b hover:bg-muted/50">
-                                                    <td className="p-4">{campaign.name}</td>
-                                                    <td className="p-4">{campaign.userName}</td>
-                                                    <td className="p-4">{campaign.contacts}</td>
-                                                    <td className="p-4">
-                                                        <Badge variant={getCampaignStatusColor(campaign.status)}>
-                                                            {campaign.status}
-                                                        </Badge>
-                                                    </td>
-                                                    <td className="p-4">{campaign.sentAt}</td>
-                                                    <td className="p-4">
-                                                        {campaign.deliveryRate ? `${campaign.deliveryRate}%` : "N/A"}
-                                                    </td>
-                                                    <td className="p-4">
-                                                        <div className="flex items-center gap-2">
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                onClick={() => handleViewCampaign(campaign)}
-                                                            >
-                                                                <Eye className="h-4 w-4" />
-                                                            </Button>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            ))
-                                        ) : (
-                                            <tr>
-                                                <td colSpan={7} className="p-4 text-center text-muted-foreground">
-                                                    No campaigns found
-                                                </td>
-                                            </tr>
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
-
-                {/* Dialog */}
-                <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-                    <DialogContent className="max-w-2xl">
+                <div className="flex flex-col md:flex-row gap-4 mb-6">
+                    <div className="relative flex-grow">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            placeholder="Search campaigns..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="pl-10 w-full md:w-[450px]"
+                        />
+                    </div>
+                    <div className="flex gap-2">
+                        <Select value={statusFilter} onValueChange={setStatusFilter}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Filter by status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Statuses</SelectItem>
+                                <SelectItem value="completed">Completed</SelectItem>
+                                <SelectItem value="scheduled">Scheduled</SelectItem>
+                                <SelectItem value="failed">Failed</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <Select value={sortBy} onValueChange={setSortBy}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Sort by" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="date">Date</SelectItem>
+                                <SelectItem value="name">Name</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+                <CampaignTable
+                    campaigns={filteredCampaigns}
+                    onStatusChange={handleStatusChange}
+                    onUpdateDelivered={handleUpdateDelivered}
+                />
+                {/* Delivered Modal */}
+                <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+                    <DialogContent>
                         <DialogHeader>
-                            <DialogTitle>Campaign Details</DialogTitle>
-                            <DialogDescription>Detailed information about the campaign.</DialogDescription>
+                            <DialogTitle>Update Delivered Count</DialogTitle>
                         </DialogHeader>
-                        {selectedCampaign && (
-                            <div className="space-y-4">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <Label className="text-muted-foreground text-sm">Campaign Name</Label>
-                                        <p className="font-medium">{selectedCampaign.name}</p>
-                                    </div>
-                                    <div>
-                                        <Label className="text-muted-foreground text-sm">Status</Label>
-                                        <div>
-                                            <Badge variant={getCampaignStatusColor(selectedCampaign.status)}>
-                                                {selectedCampaign.status}
-                                            </Badge>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <Label className="text-muted-foreground text-sm">User</Label>
-                                        <p className="font-medium">{selectedCampaign.userName}</p>
-                                    </div>
-                                    <div>
-                                        <Label className="text-muted-foreground text-sm">User ID</Label>
-                                        <p className="font-medium">{selectedCampaign.userId}</p>
-                                    </div>
-                                    <div>
-                                        <Label className="text-muted-foreground text-sm">Contacts</Label>
-                                        <p className="font-medium">{selectedCampaign.contacts}</p>
-                                    </div>
-                                    <div>
-                                        <Label className="text-muted-foreground text-sm">Sent Date</Label>
-                                        <p className="font-medium">{selectedCampaign.sentAt}</p>
-                                    </div>
-                                    <div>
-                                        <Label className="text-muted-foreground text-sm">Delivery Rate</Label>
-                                        <p className="font-medium">
-                                            {selectedCampaign.deliveryRate
-                                                ? `${selectedCampaign.deliveryRate}%`
-                                                : "N/A"}
-                                        </p>
-                                    </div>
-                                </div>
-                                <div>
-                                    <Label className="text-muted-foreground text-sm">Message Content</Label>
-                                    <div className="mt-1 p-3 bg-muted rounded-md">
-                                        <p>{selectedCampaign.message}</p>
-                                    </div>
-                                </div>
-                                {selectedCampaign.status === "failed" && (
-                                    <div className="bg-destructive/10 p-4 rounded-md">
-                                        <div className="flex items-center gap-2">
-                                            <AlertCircle className="h-4 w-4 text-destructive" />
-                                            <p className="font-medium text-destructive">Campaign Failed</p>
-                                        </div>
-                                        <p className="text-sm mt-1">
-                                            This campaign encountered delivery issues. Please check the system logs for
-                                            more details.
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
-                        )}
+                        <Input
+                            type="number"
+                            value={deliveredValue}
+                            onChange={(e) => setDeliveredValue(Number(e.target.value))}
+                            className="mb-4"
+                        />
                         <DialogFooter>
-                            <Button onClick={() => setIsViewDialogOpen(false)}>Close</Button>
+                            <Button onClick={handleSaveDelivered}>Save</Button>
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>

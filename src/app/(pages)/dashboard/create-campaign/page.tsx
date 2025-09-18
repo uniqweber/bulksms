@@ -1,490 +1,249 @@
 "use client";
 
 import UserDashboardLayout from "@/components/dashboard/layout/user-dashboard-layout";
-import {Alert, AlertDescription, AlertTitle} from "@/components/ui/alert";
 import {Button} from "@/components/ui/button";
 import {Card, CardContent} from "@/components/ui/card";
 import {Input} from "@/components/ui/input";
 import {Label} from "@/components/ui/label";
-import {Tabs, TabsContent, TabsList, TabsTrigger} from "@/components/ui/tabs";
 import {Textarea} from "@/components/ui/textarea";
 import {useUser} from "@/context/firebase-context";
 import {db} from "@/firebase";
+import useCurrentCredits from "@/hooks/use-current-credit";
 import {addDoc, collection, doc, increment, serverTimestamp, updateDoc} from "firebase/firestore";
-import {AlertCircle, Info, Loader2, Send, Upload} from "lucide-react";
-import {useRouter} from "next/navigation";
-import {ChangeEvent, FormEvent, useRef, useState} from "react";
-import * as XLSX from "xlsx";
-
-interface Contact {
-    [key: string]: string;
-}
-
-interface CampaignData {
-    name: string;
-    message: string;
-    scheduledDate: string;
-    scheduledTime: string;
-}
+import {Info, Loader2} from "lucide-react";
+import Link from "next/link";
+import {useMemo, useState} from "react";
 
 export default function CreateCampaign() {
-    const navigate = useRouter();
-    const {user} = useUser(); // current logged in user
-    const [step, setStep] = useState<number>(1);
-    const [loading, setLoading] = useState<boolean>(false);
-    const [error, setError] = useState<string>("");
-    const [success, setSuccess] = useState<boolean>(false);
-    const [csvFile, setCsvFile] = useState<File | null>(null);
-    const [contacts, setContacts] = useState<Contact[]>([]);
-    const [contactsPreview, setContactsPreview] = useState<Contact[]>([]);
-    const [manualContacts, setManualContacts] = useState<number>(0);
-    const [campaignData, setCampaignData] = useState<CampaignData>({
-        name: "",
-        message: "",
-        scheduledDate: "",
-        scheduledTime: "",
-    });
+    const {user} = useUser();
+    const userCurrentCredits = useCurrentCredits();
 
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [campaignName, setCampaignName] = useState("");
+    const [message, setMessage] = useState("");
+    const [contactCount, setContactCount] = useState<number>(0);
+    const [driveLink, setDriveLink] = useState("");
+    const [sendType, setSendType] = useState<"now" | "later">("now");
+    const [scheduledDate, setScheduledDate] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
 
-    // Handle input changes
-    const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-        const {name, value} = e.target;
-        setCampaignData((prev) => ({...prev, [name]: value}));
+    const getSegments = (msg: string) => {
+        const len = msg.length;
+        if (len === 0) return 0;
+        if (len <= 160) return 1;
+        if (len <= 306) return 2;
+        if (len <= 459) return 3;
+        return Math.ceil(len / 153);
     };
 
-    // Handle file upload (CSV or Excel)
-    const handleFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+    const segments = useMemo(() => getSegments(message), [message]);
+    const requiredCredits = useMemo(() => contactCount * segments, [contactCount, segments]);
 
-        console.log(file);
-
-        setCsvFile(file);
-        setError("");
-
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const data = event.target?.result;
-            if (!data) return;
-
-            let parsedContacts: Contact[] = [];
-
-            if (file.name.endsWith(".csv")) {
-                const text = data as string;
-                const rows = text.split("\n").filter((r) => r.trim() !== "");
-                const headers = rows[0].split(",");
-
-                if (!headers.includes("phone")) {
-                    setError('CSV/Excel must include a "phone" column');
-                    return;
-                }
-
-                for (let i = 1; i < rows.length; i++) {
-                    const values = rows[i].split(",");
-                    const contact: Contact = {};
-                    headers.forEach((header, index) => {
-                        contact[header.trim()] = values[index]?.trim() || "";
-                    });
-                    parsedContacts.push(contact);
-                }
-            } else {
-                const workbook = XLSX.read(data, {type: "binary"});
-                const sheetName = workbook.SheetNames[0];
-                const sheet = workbook.Sheets[sheetName];
-                parsedContacts = XLSX.utils.sheet_to_json(sheet);
-            }
-
-            setContacts(parsedContacts);
-            setContactsPreview(parsedContacts.slice(0, 5));
-        };
-
-        if (file.name.endsWith(".csv")) {
-            reader.readAsText(file);
-        } else {
-            reader.readAsBinaryString(file);
-        }
+    const validate = () => {
+        if (!campaignName.trim()) return "Campaign name is required!";
+        if (!message.trim()) return "Message cannot be empty!";
+        if (contactCount <= 0) return "Please enter a valid contact count!";
+        if (!driveLink.trim()) return "Please provide a Google Drive shareable link!";
+        if (!user) return "User not found!";
+        if ((userCurrentCredits ?? 0) < requiredCredits) return "Not enough credits to create this campaign!";
+        if (sendType === "later" && new Date(scheduledDate) <= new Date())
+            return "Scheduled date must be in the future!";
+        return null;
     };
 
-    const handleSubmit = async (e: FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-
-        if (!user) {
-            setError("You must be logged in to create a campaign");
-            return;
-        }
-
-        if (step === 1 && !csvFile && manualContacts <= 0) {
-            setError("Please upload a CSV/Excel file or enter total contacts manually");
-            return;
-        }
-
-        if (step === 2) {
-            if (!campaignData.name.trim()) {
-                setError("Please enter a campaign name");
-                return;
-            }
-            if (!campaignData.message.trim()) {
-                setError("Please enter a message");
-                return;
-            }
-
-            const totalRecipients = contacts.length || manualContacts;
-            if (totalRecipients === 0) {
-                setError("You must provide at least 1 recipient");
-                return;
-            }
-
-            if (user.currentCredit < totalCredits) {
-                setError("Insufficient credits to create this campaign");
-                return;
-            }
-
-            try {
-                setLoading(true);
-                setError("");
-
-                await addDoc(collection(db, "campaigns"), {
-                    ...campaignData,
-                    contacts: contacts.length ? contacts : [],
-                    manualContacts: contacts.length ? 0 : manualContacts,
-                    totalContacts: totalRecipients,
-                    segments: messagesPerSMS,
-                    totalCredits,
-                    userId: user.uid,
-                    createdAt: serverTimestamp(),
-                    status: "pending",
-                });
-
-                // Deduct credits from user balance
-                const userRef = doc(db, "users", user.uid);
-                await updateDoc(userRef, {
-                    currentCredit: increment(-totalCredits),
-                });
-
-                setSuccess(true);
-                setLoading(false);
-
-                setTimeout(() => {
-                    navigate.push("/dashboard/campaigns");
-                }, 2000);
-            } catch (err) {
-                console.error("Error creating campaign:", err);
-                setError("Failed to create campaign. Please try again.");
-                setLoading(false);
-            }
-        } else {
-            setStep(step + 1);
-        }
-    };
-
-    const handleBack = () => {
-        setStep(step - 1);
         setError("");
+
+        const errorMessage = validate();
+        if (errorMessage) {
+            setError(errorMessage);
+            return;
+        }
+
+        setLoading(true);
+
+        try {
+            await addDoc(collection(db, "campaigns"), {
+                userId: user!.uid,
+                name: campaignName,
+                message,
+                driveLink,
+                contactCount,
+                segments,
+                requiredCredits,
+                createdAt: serverTimestamp(),
+                status: "scheduled",
+                delivered: 0,
+                scheduledAt: sendType === "later" ? scheduledDate : "instant",
+            });
+
+            const userRef = doc(db, "users", user!.uid);
+            await updateDoc(userRef, {
+                currentCredit: increment(-requiredCredits),
+            });
+            alert("Campaign created successfully!");
+            setCampaignName("");
+            setMessage("");
+            setContactCount(0);
+            setDriveLink("");
+            setScheduledDate("");
+            setError("");
+        } catch (err) {
+            console.error(err);
+            setError("Failed to create campaign. Try again.");
+        } finally {
+            setLoading(false);
+        }
     };
-
-    const messageLength = campaignData.message.length;
-    const messagesPerSMS =
-        messageLength <= 160 ? 1 : messageLength <= 306 ? 2 : messageLength <= 459 ? 3 : Math.ceil(messageLength / 153);
-
-    const totalContacts = contacts.length || manualContacts;
-    const totalCredits = totalContacts * messagesPerSMS;
-
-    if (success) {
-        return (
-            <div className="container mx-auto py-8 px-4 max-w-3xl">
-                <Alert className="bg-green-50 border-green-200">
-                    <AlertCircle className="h-4 w-4 text-green-600" />
-                    <AlertTitle className="text-green-600">Success!</AlertTitle>
-                    <AlertDescription>
-                        Your campaign has been created successfully. Redirecting to campaigns page...
-                    </AlertDescription>
-                </Alert>
-            </div>
-        );
-    }
 
     return (
         <UserDashboardLayout>
-            <div className="container mx-auto py-8">
-                <div className="w-full ">
-                    <h1 className="text-3xl font-bold mb-2">Create Campaign</h1>
-                    <p className="text-muted-foreground mb-8">Send messages to your contacts</p>
+            <div className="container py-8 mx-auto">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
+                    <div>
+                        <h1 className="text-3xl font-bold">Create SMS Campaign</h1>
+                        <p className="text-muted-foreground mt-1">
+                            Create a new SMS campaign to send messages to your contacts
+                        </p>
+                    </div>
+                    <div className="mt-4 md:mt-0">
+                        <Button asChild>
+                            <Link href="/dashboard/campaigns">All Campaigns</Link>
+                        </Button>
+                    </div>
+                </div>
+                <form onSubmit={handleSubmit} className="rounded-lg space-y-6 border p-6 bg-card">
+                    {error && <p className="text-red-600 font-medium bg-red-50 p-2 rounded">⚠ {error}</p>}
 
-                    <div className="flex mb-8">
-                        <div className={`flex-1 pb-4 border-b-2 ${step >= 1 ? "border-primary" : "border-muted"}`}>
-                            <div
-                                className={`rounded-full h-8 w-8 flex items-center justify-center ${
-                                    step >= 1 ? "bg-primary text-white" : "bg-muted text-muted-foreground"
-                                }`}
-                            >
-                                1
-                            </div>
-                            <p
-                                className={`mt-2 text-sm ${
-                                    step >= 1 ? "text-primary font-medium" : "text-muted-foreground"
-                                }`}
-                            >
-                                Upload Contacts
-                            </p>
-                        </div>
-                        <div className={`flex-1 pb-4 border-b-2 ${step >= 2 ? "border-primary" : "border-muted"}`}>
-                            <div
-                                className={`rounded-full h-8 w-8 flex items-center justify-center ${
-                                    step >= 2 ? "bg-primary text-white" : "bg-muted text-muted-foreground"
-                                }`}
-                            >
-                                2
-                            </div>
-                            <p
-                                className={`mt-2 text-sm ${
-                                    step >= 2 ? "text-primary font-medium" : "text-muted-foreground"
-                                }`}
-                            >
-                                Create Message
-                            </p>
+                    <div>
+                        <Label className="mb-2">Campaign Name</Label>
+                        <Input
+                            type="text"
+                            placeholder="Enter campaign name"
+                            value={campaignName}
+                            onChange={(e) => setCampaignName(e.target.value)}
+                        />
+                    </div>
+
+                    <div>
+                        <Label className="mb-2">Message</Label>
+                        <Textarea
+                            placeholder="Type your SMS message..."
+                            value={message}
+                            className="resize-none h-32"
+                            onChange={(e) => setMessage(e.target.value)}
+                        />
+                        <p className="text-sm text-gray-500 mt-1">
+                            Characters: {message.length} | Segments: {segments}
+                        </p>
+                    </div>
+
+                    <div>
+                        <Label className="mb-2">Total Contacts</Label>
+                        <Input
+                            type="number"
+                            placeholder="Enter contact count"
+                            value={contactCount}
+                            onChange={(e) => setContactCount(Number(e.target.value))}
+                        />
+                    </div>
+
+                    <div>
+                        <Label className="mb-2">Google Drive File Link</Label>
+                        <Input
+                            type="url"
+                            placeholder="Paste shareable link here"
+                            value={driveLink}
+                            onChange={(e) => setDriveLink(e.target.value)}
+                        />
+                        <div className="text-sm text-gray-500 mt-1">
+                            <strong>Instructions:</strong>
+                            <ul className="list-disc ml-5 mt-1 space-y-1">
+                                <li>Upload your CSV/XLSX file to your Google Drive.</li>
+                                <li>
+                                    Right-click the file &gt; Get link &gt; make sure the link is set to{" "}
+                                    <strong>Anyone with the link can view</strong>.
+                                </li>
+                                <li>Copy the shareable link and paste it above.</li>
+                                <li>
+                                    Ensure the file is accessible publicly; otherwise, the campaign won&apos;t process
+                                    correctly.
+                                </li>
+                            </ul>
                         </div>
                     </div>
 
-                    {error && (
-                        <Alert className="mb-6 bg-red-50 border-red-200">
-                            <AlertCircle className="h-4 w-4 text-red-600" />
-                            <AlertTitle className="text-red-600">Error</AlertTitle>
-                            <AlertDescription>{error}</AlertDescription>
-                        </Alert>
-                    )}
+                    <div>
+                        <Label className="mb-2">Send Option</Label>
+                        <div className="flex gap-4 mt-2">
+                            <label className="flex items-center gap-2">
+                                <input type="radio" checked={sendType === "now"} onChange={() => setSendType("now")} />
+                                Now
+                            </label>
+                            <label className="flex items-center gap-2">
+                                <input
+                                    type="radio"
+                                    checked={sendType === "later"}
+                                    onChange={() => setSendType("later")}
+                                />
+                                Later
+                            </label>
+                        </div>
+                        {sendType === "later" && (
+                            <Input
+                                type="datetime-local"
+                                value={scheduledDate}
+                                onChange={(e) => setScheduledDate(e.target.value)}
+                                className="mt-2"
+                            />
+                        )}
+                    </div>
 
-                    <form onSubmit={handleSubmit}>
-                        {step === 1 && (
-                            <div>
-                                <Card>
-                                    <CardContent className="pt-6 space-y-6">
-                                        <div>
-                                            <Label htmlFor="csv-file" className="block mb-2">
-                                                Upload Contacts (CSV/Excel)
-                                            </Label>
-                                            <div className="border-2 border-dashed border-muted rounded-lg p-8 text-center">
-                                                <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                                                <p className="mb-2 text-sm text-muted-foreground">
-                                                    Drag and drop your CSV/Excel file here, or click to browse
-                                                </p>
-                                                <Input
-                                                    id="csv-file"
-                                                    type="file"
-                                                    accept=".csv,.xls,.xlsx"
-                                                    onChange={handleFileUpload}
-                                                    className="hidden"
-                                                    ref={fileInputRef}
-                                                />
-                                                <Button
-                                                    type="button"
-                                                    variant="outline"
-                                                    onClick={() => fileInputRef.current?.click()}
-                                                >
-                                                    Select File
-                                                </Button>
-                                                {csvFile && (
-                                                    <p className="mt-2 text-sm text-green-600">
-                                                        File selected: {csvFile.name}
-                                                    </p>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        <div>
-                                            <Label htmlFor="manualContacts" className="block mb-2">
-                                                Or enter total contacts manually
-                                            </Label>
-                                            <Input
-                                                id="manualContacts"
-                                                type="number"
-                                                min={1}
-                                                value={manualContacts}
-                                                onChange={(e) => setManualContacts(Number(e.target.value))}
-                                                placeholder="e.g. 500"
-                                            />
-                                        </div>
-
-                                        {contactsPreview.length > 0 && (
-                                            <div>
-                                                <h3 className="font-medium mb-2">
-                                                    Preview ({contacts.length} contacts)
-                                                </h3>
-                                                <div className="overflow-x-auto">
-                                                    <table className="w-full text-sm">
-                                                        <thead className="bg-muted">
-                                                            <tr>
-                                                                {Object.keys(contactsPreview[0]).map((header) => (
-                                                                    <th key={header} className="px-4 py-2 text-left">
-                                                                        {header}
-                                                                    </th>
-                                                                ))}
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            {contactsPreview.map((contact, index) => (
-                                                                <tr key={index} className="border-b">
-                                                                    {Object.values(contact).map((value, i) => (
-                                                                        <td key={i} className="px-4 py-2">
-                                                                            {value}
-                                                                        </td>
-                                                                    ))}
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                                {contacts.length > 5 && (
-                                                    <p className="text-xs text-muted-foreground mt-2">
-                                                        Showing 5 of {contacts.length} contacts
-                                                    </p>
-                                                )}
-                                            </div>
+                    <Card>
+                        <CardContent>
+                            <div className="flex items-start">
+                                <Info className="h-5 w-5 mr-2 font-medium flex-shrink-0 mt-0.5" />
+                                <div>
+                                    <h3 className="font-medium mb-1">Campaign Summary</h3>
+                                    <ul className="text-sm font-medium space-y-1">
+                                        <li>Recipients: {contactCount}</li>
+                                        <li>
+                                            Message length: {message.length} characters ({segments} SMS per contact)
+                                        </li>
+                                        <li>Total credits required: {requiredCredits}</li>
+                                        {scheduledDate && (
+                                            <li>Scheduled for: {new Date(scheduledDate).toLocaleString()}</li>
                                         )}
-                                    </CardContent>
-                                </Card>
-
-                                <div className="mt-6 flex justify-end">
-                                    <Button type="submit" disabled={(!csvFile && manualContacts <= 0) || loading}>
-                                        {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                        Next Step
-                                    </Button>
+                                        {userCurrentCredits !== undefined && userCurrentCredits < requiredCredits && (
+                                            <li className="text-red-600 font-medium">⚠ Not enough credits</li>
+                                        )}
+                                    </ul>
                                 </div>
                             </div>
+                        </CardContent>
+                    </Card>
+
+                    <Button
+                        type="submit"
+                        disabled={
+                            loading ||
+                            !driveLink.trim() ||
+                            !campaignName.trim() ||
+                            !message.trim() ||
+                            contactCount <= 0 ||
+                            (userCurrentCredits ?? 0) < requiredCredits
+                        }
+                    >
+                        {loading ? (
+                            <span className="flex items-center gap-2">
+                                <Loader2 className="animate-spin h-4 w-4" /> Creating...
+                            </span>
+                        ) : (
+                            "Create Campaign"
                         )}
-
-                        {step === 2 && (
-                            <div>
-                                <Card className="mb-6">
-                                    <CardContent className="pt-6 space-y-4">
-                                        <div>
-                                            <Label htmlFor="name" className="block mb-2">
-                                                Campaign Name
-                                            </Label>
-                                            <Input
-                                                id="name"
-                                                name="name"
-                                                value={campaignData.name}
-                                                onChange={handleInputChange}
-                                                placeholder="e.g. October Promotion"
-                                                required
-                                            />
-                                        </div>
-
-                                        <div>
-                                            <Label htmlFor="message" className="block mb-2">
-                                                Message
-                                            </Label>
-                                            <Textarea
-                                                id="message"
-                                                name="message"
-                                                value={campaignData.message}
-                                                onChange={handleInputChange}
-                                                placeholder="Enter your message here..."
-                                                rows={5}
-                                                required
-                                            />
-                                            <div className="flex justify-between mt-2 text-xs text-muted-foreground">
-                                                <span>{messageLength} characters</span>
-                                                <span>{messagesPerSMS} SMS per recipient</span>
-                                            </div>
-                                        </div>
-
-                                        <Tabs defaultValue="now">
-                                            <TabsList className="mb-4">
-                                                <TabsTrigger value="now">Send Now</TabsTrigger>
-                                                <TabsTrigger value="schedule">Schedule</TabsTrigger>
-                                            </TabsList>
-                                            <TabsContent value="now">
-                                                <p className="text-sm text-muted-foreground">
-                                                    Your message will be sent immediately after submission.
-                                                </p>
-                                            </TabsContent>
-                                            <TabsContent value="schedule">
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    <div>
-                                                        <Label htmlFor="scheduledDate" className="block mb-2">
-                                                            Date
-                                                        </Label>
-                                                        <Input
-                                                            id="scheduledDate"
-                                                            name="scheduledDate"
-                                                            type="date"
-                                                            value={campaignData.scheduledDate}
-                                                            onChange={handleInputChange}
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <Label htmlFor="scheduledTime" className="block mb-2">
-                                                            Time
-                                                        </Label>
-                                                        <Input
-                                                            id="scheduledTime"
-                                                            name="scheduledTime"
-                                                            type="time"
-                                                            value={campaignData.scheduledTime}
-                                                            onChange={handleInputChange}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </TabsContent>
-                                        </Tabs>
-                                    </CardContent>
-                                </Card>
-
-                                <Card className="mb-6 bg-muted/50">
-                                    <CardContent className="">
-                                        <div className="flex items-start">
-                                            <Info className="h-5 w-5 mr-2 text-muted-foreground flex-shrink-0 mt-0.5" />
-                                            <div>
-                                                <h3 className="font-medium mb-1">Campaign Summary</h3>
-                                                <ul className="text-sm text-muted-foreground space-y-1">
-                                                    <li>Recipients: {totalContacts} contacts</li>
-                                                    <li>
-                                                        Message length: {messageLength} characters ({messagesPerSMS} SMS
-                                                        per contact)
-                                                    </li>
-                                                    <li>Total credits required: {totalCredits}</li>
-                                                    {campaignData.scheduledDate && campaignData.scheduledTime && (
-                                                        <li>
-                                                            Scheduled for: {campaignData.scheduledDate} at{" "}
-                                                            {campaignData.scheduledTime}
-                                                        </li>
-                                                    )}
-                                                </ul>
-                                            </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-
-                                <div className="mt-6 flex justify-between">
-                                    <Button type="button" variant="outline" onClick={handleBack} disabled={loading}>
-                                        Back
-                                    </Button>
-                                    <Button
-                                        type="submit"
-                                        disabled={
-                                            loading ||
-                                            !campaignData.name ||
-                                            !campaignData.message ||
-                                            totalContacts <= 0 ||
-                                            user?.currentCredit < totalCredits
-                                        }
-                                    >
-                                        {loading ? (
-                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        ) : (
-                                            <Send className="mr-2 h-4 w-4" />
-                                        )}
-                                        {campaignData.scheduledDate && campaignData.scheduledTime
-                                            ? "Schedule Campaign"
-                                            : "Send Now"}
-                                    </Button>
-                                </div>
-                            </div>
-                        )}
-                    </form>
-                </div>
+                    </Button>
+                </form>
             </div>
         </UserDashboardLayout>
     );

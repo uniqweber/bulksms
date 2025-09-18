@@ -16,9 +16,9 @@ const PrivateRoute: React.FC<PrivateRouteProps> = ({children, adminOnly = false}
 
     useEffect(() => {
         if (!loading) {
-            if (!user) router.replace("/login"); // not logged in
-            else if (adminOnly && user.role !== "admin") router.replace("/dashboard"); // block non-admin
-            else if (!adminOnly && user.role === "admin") router.replace("/admin"); // block admin from user pages
+            if (!user) router.replace("/login"); 
+            else if (adminOnly && user.role !== "admin") router.replace("/dashboard"); 
+            else if (!adminOnly && user.role === "admin") router.replace("/admin"); 
         }
     }, [user, loading, adminOnly, router]);
 
