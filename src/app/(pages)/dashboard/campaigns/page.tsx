@@ -108,11 +108,7 @@ export default function Campaigns() {
                     setSortBy={setSortBy}
                 />
 
-                {filteredCampaigns.length > 0 ? (
-                    <CampaignTable campaigns={filteredCampaigns} />
-                ) : (
-                    <NoCampaigns searchTerm={searchTerm} statusFilter={statusFilter} />
-                )}
+                {filteredCampaigns.length > 0 ? <CampaignTable campaigns={filteredCampaigns} /> : <NoCampaigns />}
             </div>
         </UserDashboardLayout>
     );

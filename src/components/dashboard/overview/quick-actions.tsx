@@ -22,7 +22,7 @@ const quickActions = [
         description: "Manage your profile",
         content: "Update your profile information, change your password, and manage your account preferences.",
         label: "Settings",
-        link: "/dashboard/settings",
+        link: "/dashboard/account",
     },
 ];
 
@@ -41,7 +41,7 @@ export default function QuickActions() {
                             {action.content}
                         </CardContent>
                         <CardFooter>
-                            <Button className="w-full dark:hover:text-white" variant={"outline"}>
+                            <Button className="w-full dark:hover:text-white" variant={"outline"} asChild>
                                 <Link href={action.link}>{action.label}</Link>
                             </Button>
                         </CardFooter>

@@ -1,21 +1,48 @@
 "use client";
-import {useState} from "react";
+import {useEffect, useState} from "react";
 
 import UserDashboardLayout from "@/components/dashboard/layout/user-dashboard-layout";
 import OverviewHeader from "@/components/dashboard/overview/overview-header";
 import QuickActions from "@/components/dashboard/overview/quick-actions";
 import RecentCampaigns from "@/components/dashboard/overview/recent-campaigns";
 import StatCard from "@/components/dashboard/overview/stat-card";
+import {useUser} from "@/context/firebase-context";
+import {db} from "@/firebase";
 import useCurrentCredits from "@/hooks/use-current-credit";
+import {collection, onSnapshot, query, where} from "firebase/firestore";
 import {BarChart3, CreditCard, Send, Users} from "lucide-react";
 
 export default function Dashboard() {
+    const {user} = useUser();
     const credits = useCurrentCredits();
-    const [stats] = useState({
+    const [stats, setStats] = useState({
         totalSent: 0,
         activeContacts: 0,
         campaigns: 0,
     });
+    useEffect(() => {
+        if (!user) return;
+
+        const q = query(collection(db, "campaigns"), where("userId", "==", user.uid));
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const campaignsData = snapshot.docs.map((doc) => doc.data());
+
+            const totalSent = campaignsData.reduce((sum, c) => sum + (c.delivered || 0), 0);
+            const activeContacts = campaignsData.reduce((sum, c) => sum + (c.contactCount || 0), 0);
+            const campaignsCount = snapshot.size;
+
+            setStats({
+                totalSent,
+                activeContacts,
+                campaigns: campaignsCount,
+            });
+        });
+
+        return () => unsubscribe();
+    }, [user]);
+
+    if (!user) return null;
 
     return (
         <UserDashboardLayout>

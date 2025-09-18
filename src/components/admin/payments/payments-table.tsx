@@ -101,7 +101,7 @@ export default function PaymentsTable({payments, loading, setPayments}: Payments
                                                 }}
                                             >
                                                 <SelectTrigger
-                                                    className={`px-2 py-1 rounded-full text-xs ${
+                                                    className={`px-2 py-1 capitalize rounded-full text-xs ${
                                                         payment.status === "verified"
                                                             ? "bg-green-100 text-green-800"
                                                             : payment.status === "pending"

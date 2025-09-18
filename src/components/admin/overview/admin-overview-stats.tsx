@@ -26,7 +26,9 @@ export default function AdminOverviewStats({users, campaigns, payments}: AdminOv
                     <>
                         <div className="text-2xl font-bold">{campaigns.length}</div>
                         <p className="text-xs text-muted-foreground mt-1">
-                            {campaigns.filter((c) => c.status === "completed").length} completed
+                            {campaigns.filter((c) => c.status === "completed").length} completed{" "}
+                            {campaigns.filter((c) => c.status === "scheduled").length} scheduled{" "}
+                            {campaigns.filter((c) => c.status === "failed").length} failed
                         </p>
                     </>
                 }
@@ -36,7 +38,9 @@ export default function AdminOverviewStats({users, campaigns, payments}: AdminOv
                 title="Total Revenue"
                 stat={
                     <>
-                        <div className="text-2xl font-bold">${payments.reduce((sum, p) => sum + p.amount, 0)}</div>
+                        <div className="text-2xl font-bold">
+                            ${payments.filter((p) => p.status === "verified").reduce((sum, p) => sum + p.amount, 0)}
+                        </div>
                         <p className="text-xs text-muted-foreground mt-1">
                             From {payments.filter((p) => p.status === "verified").length} payments
                         </p>
@@ -44,17 +48,10 @@ export default function AdminOverviewStats({users, campaigns, payments}: AdminOv
                 }
             />
             <AdminStatCard
-                title="Avg. Delivery Rate"
+                title="Total Delivered Contacts"
                 stat={
                     <>
-                        <div className="text-2xl font-bold">
-                            {campaigns.filter((c) => c.deliveryRate).length > 0
-                                ? (
-                                      campaigns.reduce((sum, c) => sum + (c.deliveryRate || 0), 0) /
-                                      campaigns.filter((c) => c.deliveryRate).length
-                                  ).toFixed(1) + "%"
-                                : "N/A"}
-                        </div>
+                        <div className="text-2xl font-bold">{campaigns.filter((c) => c.delivered).reduce((sum, c) => sum + c.delivered, 0)}</div>
                         <p className="text-xs text-muted-foreground mt-1">Across all campaigns</p>
                     </>
                 }

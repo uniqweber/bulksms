@@ -1,13 +1,16 @@
 import {Button} from "@/components/ui/button";
+import {useUser} from "@/context/firebase-context";
 import {CreditCard, Send} from "lucide-react";
 import Link from "next/link";
 
 export default function OverviewHeader() {
+    const {user} = useUser();
+
     return (
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
             <div>
                 <h1 className="text-3xl font-bold">Dashboard</h1>
-                <p className="text-muted-foreground mt-1">Welcome back, John Doe</p>
+                <p className="text-muted-foreground mt-1">Welcome back, {user?.displayName}</p>
             </div>
             <div className="mt-4 md:mt-0 flex gap-3">
                 <Button variant="outline" asChild className="dark:hover:text-white">
